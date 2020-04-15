@@ -91,6 +91,9 @@ def main():
     LOGGER.setLevel(logging.WARN)
 
     args = parser.parse_args()
+    if getattr(args, 'func', None) is None:
+        parser.print_help()
+        parser.exit(2)
 
     if args.verbose > 2:
         LOGGER.setLevel(logging.DEBUG)
