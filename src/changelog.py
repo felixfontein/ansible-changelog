@@ -39,19 +39,17 @@ BASE_DIR = None
 GALAXY_PATH = None
 CHANGELOG_DIR = None
 CONFIG_PATH = None
-CHANGES_PATH = None
 ANSIBLE_DOC_PATH = None
 
 
 def set_paths(force=None):
-    global BASE_DIR, GALAXY_PATH, CHANGELOG_DIR, CONFIG_PATH, CHANGES_PATH, ANSIBLE_DOC_PATH
+    global BASE_DIR, GALAXY_PATH, CHANGELOG_DIR, CONFIG_PATH, ANSIBLE_DOC_PATH
 
     if force is not None:
         BASE_DIR = os.path.abspath(force)
         GALAXY_PATH = os.path.join(BASE_DIR, 'galaxy.yml')
         CHANGELOG_DIR = os.path.join(BASE_DIR, 'changelogs')
         CONFIG_PATH = os.path.join(CHANGELOG_DIR, 'config.yaml')
-        CHANGES_PATH = os.path.join(CHANGELOG_DIR, '.changes.yaml')
         return
 
     previous = None
@@ -68,7 +66,6 @@ def set_paths(force=None):
             sys.exit(3)
 
     GALAXY_PATH = os.path.join(BASE_DIR, 'galaxy.yml')
-    CHANGES_PATH = os.path.join(CHANGELOG_DIR, '.changes.yaml')
     if os.path.exists(GALAXY_PATH):
         # We are in a collection and assume ansible-doc is available in $PATH
         ANSIBLE_DOC_PATH = 'ansible-doc'
@@ -244,7 +241,7 @@ def command_release(args):
 
             version = galaxy['version']
 
-    changes = load_changes()
+    changes = load_changes(config)
     plugins = load_plugins(version=version, force_reload=reload_plugins)
     fragments = load_fragments(config)
     add_release(config, changes, plugins, fragments, version, codename, date)
@@ -261,7 +258,7 @@ def command_generate(args):
 
     config = ChangelogConfig.load(CONFIG_PATH)
 
-    changes = load_changes()
+    changes = load_changes(config)
     if not changes.has_release:
         print('Cannot create changelog when not at least one release has been added.')
         sys.exit(2)
@@ -270,11 +267,13 @@ def command_generate(args):
     generate_changelog(config, changes, plugins, fragments)
 
 
-def load_changes():
+def load_changes(config):
     """Load changes metadata.
+    :type config: ChangelogConfig
     :rtype: ChangesMetadata
     """
-    changes = ChangesMetadata(CHANGES_PATH)
+    path = os.path.join(CHANGELOG_DIR, config.changes_file)
+    changes = ChangesMetadata(path)
 
     return changes
 
@@ -753,6 +752,7 @@ class ChangelogConfig(object):
         self.new_plugins_after_name = self.config.get('new_plugins_after_name', '')
         self.release_tag_re = self.config.get('release_tag_re', r'((?:[\d.ab]|rc)+)')
         self.pre_release_tag_re = self.config.get('pre_release_tag_re', r'(?P<pre_release>\.\d+(?:[ab]|rc)+\d*)$')
+        self.changes_file = self.config.get('changes_file', '.changes.yml')
 
         self.sections = collections.OrderedDict([(self.prelude_name, self.prelude_title)])
 
@@ -765,6 +765,7 @@ class ChangelogConfig(object):
         """
         config = {
             'notesdir': self.notes_dir,
+            'changes_file': self.changes_file,
             'prelude_section_name': self.prelude_name,
             'prelude_section_title': self.prelude_title,
             'new_plugins_after_name': self.new_plugins_after_name,
@@ -792,6 +793,7 @@ class ChangelogConfig(object):
     @staticmethod
     def default():
         config = {
+            'changes_file': 'changelog.yml',
             'release_tag_re': r'(v(?:[\d.ab\-]|rc)+)',  # from Ansible's config.yml
             'pre_release_tag_re': r'(?P<pre_release>(?:[ab]|rc)+\d*)$',  # from Ansible's config.yml
             'new_plugins_after_name': 'removed_features',
