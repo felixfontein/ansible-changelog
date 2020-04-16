@@ -220,7 +220,7 @@ def load_fragments(config, paths=None, exceptions=None):
     """
     if not paths:
         fragments_dir = os.path.join(CHANGELOG_DIR, config.notes_dir)
-        paths = [os.path.join(fragments_dir, path) for path in os.listdir(fragments_dir)]
+        paths = [os.path.join(fragments_dir, path) for path in os.listdir(fragments_dir) if not path.startswith('.')]
 
     fragments = []
 
