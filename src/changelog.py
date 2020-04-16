@@ -236,9 +236,7 @@ def command_release(args):
             codename = codename or ansible.release.__codename__
 
         elif not version:
-            with open(GALAXY_PATH, 'r') as galaxy_fd:
-                galaxy = yaml.safe_load(galaxy_fd)
-
+            galaxy = load_galaxy_metadata()
             version = galaxy['version']
 
     changes = load_changes(config)
@@ -267,6 +265,11 @@ def command_generate(args):
     generate_changelog(config, changes, plugins, fragments)
 
 
+def load_galaxy_metadata():
+    with open(GALAXY_PATH, 'r') as galaxy_fd:
+        return yaml.safe_load(galaxy_fd)
+
+
 def load_changes(config):
     """Load changes metadata.
     :type config: ChangelogConfig
@@ -276,6 +279,38 @@ def load_changes(config):
     changes = ChangesMetadata(path)
 
     return changes
+
+
+def load_plugin_metadata(plugin_type, collection_name):
+    # [ANSIBLE_DOC_PATH, '--json', '--metadata-dump', '-t', plugin_type]
+    command = [ANSIBLE_DOC_PATH, '--json', '-t', plugin_type, '--list']
+    if collection_name:
+        command.append(collection_name)
+    output = subprocess.check_output(command)
+    plugins_list = json.loads(to_text(output))
+
+    result = dict()
+    if not plugins_list:
+        return result
+
+    command = [ANSIBLE_DOC_PATH, '--json', '-t', plugin_type]
+    command.extend(sorted(plugins_list.keys()))
+    output = subprocess.check_output(command)
+    plugins_data = json.loads(to_text(output))
+
+    for name, data in plugins_data.items():
+        namespace = None
+        if collection_name and name.startswith(collection_name + '.'):
+            namespace = collection_name
+            name = name[len(collection_name) + 1:]
+        docs = data.get('doc') or dict()
+        result[name] = {
+            'description': docs.get('short_description'),
+            'name': name,
+            'namespace': namespace,
+            'version_added': docs.get('version_added'),
+        }
+    return result
 
 
 def load_plugins(version, force_reload):
@@ -301,10 +336,13 @@ def load_plugins(version, force_reload):
         plugins_data['version'] = version
         plugins_data['plugins'] = {}
 
+        collection_name = None
+        if GALAXY_PATH:
+            galaxy = load_galaxy_metadata()
+            collection_name = '{0}.{1}'.format(galaxy['namespace'], galaxy['name'])
+
         for plugin_type in C.DOCUMENTABLE_PLUGINS:
-            output = subprocess.check_output([ANSIBLE_DOC_PATH,
-                                              '--json', '--metadata-dump', '-t', plugin_type])
-            plugins_data['plugins'][plugin_type] = json.loads(to_text(output))
+            plugins_data['plugins'][plugin_type] = load_plugin_metadata(plugin_type, collection_name)
 
         # remove empty namespaces from plugins
         for section in plugins_data['plugins'].values():
@@ -589,8 +627,7 @@ class ChangelogGenerator(object):
 
         builder = RstBuilder()
         if GALAXY_PATH:
-            with open(GALAXY_PATH, 'r') as galaxy_fd:
-                galaxy = yaml.safe_load(galaxy_fd)
+            galaxy = load_galaxy_metadata()
             collection_name = '{0}.{1}'.format(galaxy['namespace'].title(), galaxy['name'].title())
             if codename:
                 builder.set_title('%s %s "%s" Release Notes' % (collection_name, major_minor_version, codename))
