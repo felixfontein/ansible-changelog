@@ -262,6 +262,9 @@ def command_generate(args):
     config = ChangelogConfig.load(CONFIG_PATH)
 
     changes = load_changes()
+    if not changes.has_release:
+        print('Cannot create changelog when not at least one release has been added.')
+        sys.exit(2)
     plugins = load_plugins(version=changes.latest_version, force_reload=reload_plugins)
     fragments = load_fragments(config)
     generate_changelog(config, changes, plugins, fragments)
@@ -864,6 +867,13 @@ class ChangesMetadata(object):
         :rtype: str
         """
         return sorted(self.releases, reverse=True, key=packaging.version.Version)[0]
+
+    @property
+    def has_release(self):
+        """Whether there is at least one release.
+        :rtype: bool
+        """
+        return bool(self.releases)
 
     @property
     def releases(self):
