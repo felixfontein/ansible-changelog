@@ -111,9 +111,11 @@ def command_lint(args):
     """
     paths = args.fragments  # type: list
 
+    config = ChangelogConfig(CONFIG_PATH)
+
     exceptions = []
-    fragments = load_fragments(paths, exceptions)
-    lint_fragments(fragments, exceptions)
+    fragments = load_fragments(config, paths, exceptions)
+    lint_fragments(config, fragments, exceptions)
 
 
 def command_release(args):
@@ -125,6 +127,8 @@ def command_release(args):
     date = datetime.datetime.strptime(args.date, "%Y-%m-%d").date()
     reload_plugins = args.reload_plugins  # type: bool
 
+    config = ChangelogConfig(CONFIG_PATH)
+
     if not version or not codename:
         import ansible.release
 
@@ -133,9 +137,9 @@ def command_release(args):
 
     changes = load_changes()
     plugins = load_plugins(version=version, force_reload=reload_plugins)
-    fragments = load_fragments()
-    add_release(changes, plugins, fragments, version, codename, date)
-    generate_changelog(changes, plugins, fragments)
+    fragments = load_fragments(config)
+    add_release(config, changes, plugins, fragments, version, codename, date)
+    generate_changelog(config, changes, plugins, fragments)
 
 
 def command_generate(args):
@@ -144,10 +148,12 @@ def command_generate(args):
     """
     reload_plugins = args.reload_plugins  # type: bool
 
+    config = ChangelogConfig(CONFIG_PATH)
+
     changes = load_changes()
     plugins = load_plugins(version=changes.latest_version, force_reload=reload_plugins)
-    fragments = load_fragments()
-    generate_changelog(changes, plugins, fragments)
+    fragments = load_fragments(config)
+    generate_changelog(config, changes, plugins, fragments)
 
 
 def load_changes():
@@ -201,13 +207,13 @@ def load_plugins(version, force_reload):
     return plugins
 
 
-def load_fragments(paths=None, exceptions=None):
+def load_fragments(config, paths=None, exceptions=None):
     """
+    :type config: ChangelogConfig
     :type paths: list[str] | None
     :type exceptions: list[tuple[str, Exception]] | None
     """
     if not paths:
-        config = ChangelogConfig(CONFIG_PATH)
         fragments_dir = os.path.join(CHANGELOG_DIR, config.notes_dir)
         paths = [os.path.join(fragments_dir, path) for path in os.listdir(fragments_dir)]
 
@@ -225,12 +231,12 @@ def load_fragments(paths=None, exceptions=None):
     return fragments
 
 
-def lint_fragments(fragments, exceptions):
+def lint_fragments(config, fragments, exceptions):
     """
+    :type config: ChangelogConfig
     :type fragments: list[ChangelogFragment]
     :type exceptions: list[tuple[str, Exception]]
     """
-    config = ChangelogConfig(CONFIG_PATH)
     linter = ChangelogFragmentLinter(config)
 
     errors = [(ex[0], 0, 0, 'yaml parsing error') for ex in exceptions]
@@ -244,8 +250,9 @@ def lint_fragments(fragments, exceptions):
         print(message)
 
 
-def add_release(changes, plugins, fragments, version, codename, date):
+def add_release(config, changes, plugins, fragments, version, codename, date):
     """Add a release to the change metadata.
+    :type config: ChangelogConfig
     :type changes: ChangesMetadata
     :type plugins: list[PluginDescription]
     :type fragments: list[ChangelogFragment]
@@ -256,7 +263,7 @@ def add_release(changes, plugins, fragments, version, codename, date):
     # make sure the version parses
     packaging.version.Version(version)
 
-    LOGGER.info('release version %s is a %s version', version, 'release' if is_release_version(version) else 'pre-release')
+    LOGGER.info('release version %s is a %s version', version, 'release' if is_release_version(config, version) else 'pre-release')
 
     # filter out plugins which were not added in this release
     plugins = list(filter(lambda p: version.startswith('%s.' % p.version_added), plugins))
@@ -272,14 +279,13 @@ def add_release(changes, plugins, fragments, version, codename, date):
     changes.save()
 
 
-def generate_changelog(changes, plugins, fragments):
+def generate_changelog(config, changes, plugins, fragments):
     """Generate the changelog.
+    :type config: ChangelogConfig
     :type changes: ChangesMetadata
     :type plugins: list[PluginDescription]
     :type fragments: list[ChangelogFragment]
     """
-    config = ChangelogConfig(CONFIG_PATH)
-
     changes.prune_plugins(plugins)
     changes.prune_fragments(fragments)
     changes.save()
@@ -336,13 +342,12 @@ class ChangelogFragmentLinter(object):
         return errors
 
 
-def is_release_version(version):
+def is_release_version(config, version):
     """Deterine the type of release from the given version.
+    :type config: ChangelogConfig
     :type version: str
     :rtype: bool
     """
-    config = ChangelogConfig(CONFIG_PATH)
-
     tag_format = 'v%s' % version
 
     if re.search(config.pre_release_tag_re, tag_format):
@@ -424,10 +429,10 @@ class ChangelogGenerator(object):
         for version in sorted(self.changes.releases, reverse=True, key=packaging.version.Version):
             release = self.changes.releases[version]
 
-            if is_release_version(version):
+            if is_release_version(self.config, version):
                 entry_version = version  # next version is a release, it needs its own entry
                 entry_fragment = None
-            elif not is_release_version(entry_version):
+            elif not is_release_version(self.config, entry_version):
                 entry_version = version  # current version is a pre-release, next version needs its own entry
                 entry_fragment = None
 
