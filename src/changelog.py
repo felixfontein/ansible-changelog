@@ -33,11 +33,48 @@ from ansible import constants as C
 from ansible.module_utils.six import string_types
 from ansible.module_utils._text import to_bytes, to_text
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-CHANGELOG_DIR = os.path.join(BASE_DIR, 'changelogs')
-CONFIG_PATH = os.path.join(CHANGELOG_DIR, 'config.yaml')
-CHANGES_PATH = os.path.join(CHANGELOG_DIR, '.changes.yaml')
 LOGGER = logging.getLogger('changelog')
+
+BASE_DIR = None
+GALAXY_PATH = None
+CHANGELOG_DIR = None
+CONFIG_PATH = None
+CHANGES_PATH = None
+ANSIBLE_DOC_PATH = None
+
+
+def set_paths(force=None):
+    global BASE_DIR, GALAXY_PATH, CHANGELOG_DIR, CONFIG_PATH, CHANGES_PATH, ANSIBLE_DOC_PATH
+
+    if force is not None:
+        BASE_DIR = os.path.abspath(force)
+        GALAXY_PATH = os.path.join(BASE_DIR, 'galaxy.yml')
+        CHANGELOG_DIR = os.path.join(BASE_DIR, 'changelogs')
+        CONFIG_PATH = os.path.join(CHANGELOG_DIR, 'config.yaml')
+        CHANGES_PATH = os.path.join(CHANGELOG_DIR, '.changes.yaml')
+        return
+
+    previous = None
+    BASE_DIR = os.getcwd()
+    while BASE_DIR != previous:
+        CHANGELOG_DIR = os.path.join(BASE_DIR, 'changelogs')
+        CONFIG_PATH = os.path.join(CHANGELOG_DIR, 'config.yaml')
+        if os.path.exists(CHANGELOG_DIR) and os.path.exists(CONFIG_PATH):
+            break
+        previous, BASE_DIR = BASE_DIR, os.path.dirname(BASE_DIR)
+        if previous == BASE_DIR:
+            print("Only the 'init' command can be used outside an Ansible checkout and outside"
+                  " a collection repository set up to use Ansible's changelog generator.\n")
+            sys.exit(3)
+
+    GALAXY_PATH = os.path.join(BASE_DIR, 'galaxy.yml')
+    CHANGES_PATH = os.path.join(CHANGELOG_DIR, '.changes.yaml')
+    if os.path.exists(GALAXY_PATH):
+        # We are in a collection and assume ansible-doc is available in $PATH
+        ANSIBLE_DOC_PATH = 'ansible-doc'
+    else:
+        ANSIBLE_DOC_PATH = os.path.join(BASE_DIR, 'bin', 'ansible-doc')
+        GALAXY_PATH = None
 
 
 def main():
@@ -51,6 +88,14 @@ def main():
                         help='increase verbosity of output')
 
     subparsers = parser.add_subparsers(metavar='COMMAND')
+
+    init_parser = subparsers.add_parser('init',
+                                        parents=[common],
+                                        help='set up changelog infrastructure for collection')
+    init_parser.set_defaults(func=command_init)
+    init_parser.add_argument('root',
+                             metavar='COLLECTION_ROOT',
+                             help='path to collection root')
 
     lint_parser = subparsers.add_parser('lint',
                                         parents=[common],
@@ -68,7 +113,7 @@ def main():
     release_parser.add_argument('--version',
                                 help='override release version')
     release_parser.add_argument('--codename',
-                                help='override release codename')
+                                help='override/set release codename')
     release_parser.add_argument('--date',
                                 default=str(datetime.date.today()),
                                 help='override release date')
@@ -110,13 +155,63 @@ def main():
     args.func(args)
 
 
+def makedirs(path):
+    """
+    :type path: str
+    """
+    if os.path.exists(path):
+        if not os.path.isdir(path):
+            raise Exception('Path {0} already exists and is not a folder.'.format(path))
+        return
+    try:
+        os.makedirs(path)
+    except Exception:
+        if os.path.isdir(path):
+            return
+        raise
+
+
+def command_init(args):
+    """
+    :type args: any
+    """
+    root = args.root  # type: str
+
+    set_paths(force=root)
+
+    if not os.path.exists(GALAXY_PATH):
+        print('The file galaxy.yml does not exists in the collection root!')
+        sys.exit(3)
+    if os.path.exists(CONFIG_PATH):
+        print('A configuration file already exists at "{0}"!'.format(CONFIG_PATH))
+        sys.exit(3)
+
+    config = ChangelogConfig.default()
+    fragments_dir = os.path.join(CHANGELOG_DIR, config.notes_dir)
+    try:
+        makedirs(fragments_dir)
+        print('Created fragments directory "{0}"'.format(fragments_dir))
+    except Exception:
+        print('Cannot create fragments directory "{0}"'.format(fragments_dir))
+        sys.exit(3)
+
+    try:
+        config.store(CONFIG_PATH)
+        print('Created config file "{0}"'.format(CONFIG_PATH))
+    except Exception:
+        print('Cannot create config file "{0}"'.format(CONFIG_PATH))
+        sys.exit(3)
+
+
 def command_lint(args):
     """
     :type args: any
     """
+    set_paths()
+
     paths = args.fragments  # type: list
 
-    config = ChangelogConfig(CONFIG_PATH)
+    config = ChangelogConfig.load(CONFIG_PATH)
 
     exceptions = []
     fragments = load_fragments(config, paths, exceptions)
@@ -127,18 +222,27 @@ def command_release(args):
     """
     :type args: any
     """
+    set_paths()
+
     version = args.version  # type: str
     codename = args.codename  # type: str
     date = datetime.datetime.strptime(args.date, "%Y-%m-%d").date()
     reload_plugins = args.reload_plugins  # type: bool
 
-    config = ChangelogConfig(CONFIG_PATH)
+    config = ChangelogConfig.load(CONFIG_PATH)
 
     if not version or not codename:
-        import ansible.release
+        if GALAXY_PATH is None:
+            import ansible.release
 
-        version = version or ansible.release.__version__
-        codename = codename or ansible.release.__codename__
+            version = version or ansible.release.__version__
+            codename = codename or ansible.release.__codename__
+
+        elif not version:
+            with open(GALAXY_PATH, 'r') as galaxy_fd:
+                galaxy = yaml.safe_load(galaxy_fd)
+
+            version = galaxy['version']
 
     changes = load_changes()
     plugins = load_plugins(version=version, force_reload=reload_plugins)
@@ -151,9 +255,11 @@ def command_generate(args):
     """
     :type args: any
     """
+    set_paths()
+
     reload_plugins = args.reload_plugins  # type: bool
 
-    config = ChangelogConfig(CONFIG_PATH)
+    config = ChangelogConfig.load(CONFIG_PATH)
 
     changes = load_changes()
     plugins = load_plugins(version=changes.latest_version, force_reload=reload_plugins)
@@ -194,7 +300,7 @@ def load_plugins(version, force_reload):
         plugins_data['plugins'] = {}
 
         for plugin_type in C.DOCUMENTABLE_PLUGINS:
-            output = subprocess.check_output([os.path.join(BASE_DIR, 'bin', 'ansible-doc'),
+            output = subprocess.check_output([ANSIBLE_DOC_PATH,
                                               '--json', '--metadata-dump', '-t', plugin_type])
             plugins_data['plugins'][plugin_type] = json.loads(to_text(output))
 
@@ -428,7 +534,7 @@ class ChangelogGenerator(object):
         :rtype: str
         """
         latest_version = self.changes.latest_version
-        codename = self.changes.releases[latest_version]['codename']
+        codename = self.changes.releases[latest_version].get('codename')
         major_minor_version = '.'.join(latest_version.split('.')[:2])
 
         release_entries = collections.OrderedDict()
@@ -480,7 +586,16 @@ class ChangelogGenerator(object):
                 entry_config['plugins'][plugin_type] += plugin_names
 
         builder = RstBuilder()
-        builder.set_title('Ansible %s "%s" Release Notes' % (major_minor_version, codename))
+        if GALAXY_PATH:
+            with open(GALAXY_PATH, 'r') as galaxy_fd:
+                galaxy = yaml.safe_load(galaxy_fd)
+            collection_name = '{0}.{1}'.format(galaxy['namespace'].title(), galaxy['name'].title())
+            if codename:
+                builder.set_title('%s %s "%s" Release Notes' % (collection_name, major_minor_version, codename))
+            else:
+                builder.set_title('%s %s Release Notes' % (collection_name, major_minor_version))
+        else:
+            builder.set_title('Ansible %s "%s" Release Notes' % (major_minor_version, codename))
         builder.add_raw_rst('.. contents:: Topics\n\n')
 
         for version, release in release_entries.items():
@@ -623,12 +738,11 @@ class ChangelogFragment(object):
 
 class ChangelogConfig(object):
     """Configuration for changelogs."""
-    def __init__(self, path):
+    def __init__(self, config):
         """
-        :type path: str
+        :type config: dict
         """
-        with open(path, 'r') as config_fd:
-            self.config = yaml.safe_load(config_fd)
+        self.config = config
 
         self.notes_dir = self.config.get('notesdir', 'fragments')
         self.prelude_name = self.config.get('prelude_section_name', 'release_summary')
@@ -641,6 +755,53 @@ class ChangelogConfig(object):
 
         for section_name, section_title in self.config['sections']:
             self.sections[section_name] = section_title
+
+    def store(self, path):
+        """
+        :type path: str
+        """
+        config = {
+            'notesdir': self.notes_dir,
+            'prelude_section_name': self.prelude_name,
+            'prelude_section_title': self.prelude_title,
+            'new_plugins_after_name': self.new_plugins_after_name,
+            'release_tag_re': self.release_tag_re,
+            'pre_release_tag_re': self.pre_release_tag_re,
+            'sections': [],
+        }
+        for k, v in self.sections.items():
+            if k == self.prelude_name and v == self.prelude_title:
+                continue
+            config['sections'].append([k, v])
+
+        with open(path, 'wb') as f:
+            yaml.safe_dump(config, f, default_flow_style=False, encoding='utf-8')
+
+    @staticmethod
+    def load(path):
+        """
+        :type path: str
+        """
+        with open(path, 'r') as config_fd:
+            config = yaml.safe_load(config_fd)
+        return ChangelogConfig(config)
+
+    @staticmethod
+    def default():
+        config = {
+            'release_tag_re': r'(v(?:[\d.ab\-]|rc)+)',  # from Ansible's config.yml
+            'pre_release_tag_re': r'(?P<pre_release>(?:[ab]|rc)+\d*)$',  # from Ansible's config.yml
+            'new_plugins_after_name': 'removed_features',
+            'sections': [
+                ['major_changes', 'Major Changes'],
+                ['minor_changes', 'Minor Changes'],
+                ['deprecated_features', 'Deprecated Features'],
+                ['removed_features', 'Removed Features (previously deprecated)'],
+                ['bugfixes', 'Bugfixes'],
+                ['known_issues', 'Known Issues'],
+            ],
+        }
+        return ChangelogConfig(config)
 
 
 class RstBuilder(object):
@@ -792,9 +953,10 @@ class ChangesMetadata(object):
         """
         if version not in self.releases:
             self.releases[version] = dict(
-                codename=codename,
                 release_date=str(release_date),
             )
+            if codename:
+                self.releases[version]['codename'] = codename
         else:
             LOGGER.warning('release %s already exists', version)
 
