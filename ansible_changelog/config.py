@@ -80,7 +80,7 @@ class ChangelogConfig(object):
         self.new_plugins_after_name = self.config.get('new_plugins_after_name', '')
         self.release_tag_re = self.config.get('release_tag_re', r'((?:[\d.ab]|rc)+)')
         self.pre_release_tag_re = self.config.get('pre_release_tag_re', r'(?P<pre_release>\.\d+(?:[ab]|rc)+\d*)$')
-        self.changes_file = self.config.get('changes_file', '.changes.yml')
+        self.changes_file = self.config.get('changes_file', '.changes.yaml')
         self.changes_format = self.config.get('changes_format', 'classic')
         self.keep_fragments = self.config.get('keep_fragments', self.changes_format == 'classic')
         if self.changes_format not in ('classic', 'combined'):
