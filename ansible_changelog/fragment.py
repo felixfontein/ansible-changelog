@@ -56,6 +56,13 @@ class ChangelogFragment(object):
         self.path = path
         self.name = os.path.basename(path)
 
+    def remove(self):
+        """Remove changelog fragment from disk."""
+        try:
+            os.remove(self.path)
+        except Exception:
+            pass
+
     @staticmethod
     def load(path):
         """Load a ChangelogFragment from a file.

@@ -22,12 +22,13 @@ def generate_changelog(paths, config, changes, plugins, fragments):
     """Generate the changelog.
     :type paths: PathsConfig
     :type config: ChangelogConfig
-    :type changes: ChangesMetadata
+    :type changes: ChangesBase
     :type plugins: list[PluginDescription]
     :type fragments: list[ChangelogFragment]
     """
     changes.prune_plugins(plugins)
-    changes.prune_fragments(fragments)
+    if config.changes_format == 'classic':
+        changes.prune_fragments(fragments)
     changes.save()
 
     major_minor_version = '.'.join(changes.latest_version.split('.')[:2])
@@ -46,7 +47,7 @@ class ChangelogGenerator(object):
         """
         :type paths: PathsConfig
         :type config: ChangelogConfig
-        :type changes: ChangesMetadata
+        :type changes: ChangesBase
         :type plugins: list[PluginDescription]
         :type fragments: list[ChangelogFragment]
         """
@@ -91,30 +92,51 @@ class ChangelogGenerator(object):
 
             if entry_version not in release_entries:
                 release_entries[entry_version] = dict(
-                    fragments=[],
                     modules=[],
                     plugins={},
                 )
+                if self.config.changes_format == 'classic':
+                    release_entries[entry_version]['fragments'] = []
+                else:
+                    release_entries[entry_version]['changes'] = dict()
 
             entry_config = release_entries[entry_version]
 
             fragment_names = []
 
-            # only keep the latest prelude fragment for an entry
-            for fragment_name in release.get('fragments', []):
-                fragment = self.fragments[fragment_name]
+            if self.config.changes_format == 'classic':
+                # only keep the latest prelude fragment for an entry
+                for fragment_name in release.get('fragments', []):
+                    fragment = self.fragments[fragment_name]
 
-                if self.config.prelude_name in fragment.content:
-                    if entry_fragment:
-                        LOGGER.info('skipping fragment %s in version %s due to newer fragment %s in version %s',
-                                    fragment_name, version, entry_fragment, entry_version)
-                        continue
+                    if self.config.prelude_name in fragment.content:
+                        if entry_fragment:
+                            LOGGER.info('skipping fragment %s in version %s due to newer fragment %s in version %s',
+                                        fragment_name, version, entry_fragment, entry_version)
+                            continue
 
-                    entry_fragment = fragment_name
+                        entry_fragment = fragment_name
 
-                fragment_names.append(fragment_name)
+                    fragment_names.append(fragment_name)
 
-            entry_config['fragments'] += fragment_names
+                entry_config['fragments'] += fragment_names
+            else:
+                changes = release.get('changes', dict())
+                dest_changes = entry_config['changes']
+                for section, lines in changes.items():
+                    if section == self.config.prelude_name:
+                        if entry_fragment:
+                            LOGGER.info('skipping prelude in version %s due to newer prelude in version %s',
+                                        version, entry_version)
+                            continue
+
+                        entry_fragment = changes[self.config.prelude_name]
+                        dest_changes[section] = lines
+                    elif section in dest_changes:
+                        dest_changes[section].extend(lines)
+                    else:
+                        dest_changes[section] = list(lines)
+
             entry_config['modules'] += release.get('modules', [])
 
             for plugin_type, plugin_names in release.get('plugins', {}).items():
@@ -138,7 +160,10 @@ class ChangelogGenerator(object):
         for version, release in release_entries.items():
             builder.add_section('v%s' % version)
 
-            combined_fragments = ChangelogFragment.combine([self.fragments[fragment] for fragment in release['fragments']])
+            if self.config.changes_format == 'classic':
+                combined_fragments = ChangelogFragment.combine([self.fragments[fragment] for fragment in release['fragments']])
+            else:
+                combined_fragments = release['changes']
 
             for section_name in self.config.sections:
                 self._add_section(builder, combined_fragments, section_name)

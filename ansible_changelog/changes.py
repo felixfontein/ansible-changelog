@@ -6,11 +6,14 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 
+import abc
 import collections
 import os
 
 import packaging.version
 import yaml
+
+from ansible.module_utils import six
 
 from .utils import LOGGER, is_release_version
 
@@ -22,7 +25,10 @@ def load_changes(paths, config):
     :rtype: ChangesMetadata
     """
     path = os.path.join(paths.changelog_dir, config.changes_file)
-    changes = ChangesMetadata(path)
+    if config.changes_format == 'classic':
+        changes = ChangesMetadata(path)
+    else:
+        changes = ChangesData(config, path)
 
     return changes
 
@@ -51,19 +57,22 @@ def add_release(config, changes, plugins, fragments, version, codename, date):
         changes.add_plugin(plugin.type, plugin.name, version)
 
     for fragment in fragments:
-        changes.add_fragment(fragment.name, version)
+        changes.add_fragment(fragment, version)
 
     changes.save()
 
+    if config.changes_format != 'classic':
+        for fragment in fragments:
+            fragment.remove()
 
-class ChangesMetadata(object):
+
+@six.add_metaclass(abc.ABCMeta)
+class ChangesBase(object):
     """Read, write and manage change metadata."""
     def __init__(self, path):
         self.path = path
         self.data = self.empty()
-        self.known_fragments = set()
         self.known_plugins = set()
-        self.load()
 
     @staticmethod
     def empty():
@@ -103,8 +112,6 @@ class ChangesMetadata(object):
             self.data = self.empty()
 
         for version, config in self.releases.items():
-            self.known_fragments |= set(config.get('fragments', []))
-
             for plugin_type, plugin_names in config.get('plugins', {}).items():
                 self.known_plugins |= set('%s/%s' % (plugin_type, plugin_name) for plugin_name in plugin_names)
 
@@ -133,26 +140,9 @@ class ChangesMetadata(object):
                     config['plugins'][plugin_type] = [plugin for plugin in config['plugins'][plugin_type] if plugin not in invalid_plugins]
                     self.known_plugins -= set('%s/%s' % (plugin_type, plugin) for plugin in invalid_plugins)
 
-    def prune_fragments(self, fragments):
-        """Remove fragments which are not in the provided list of fragments.
-        :type fragments: list[ChangelogFragment]
-        """
-        valid_fragments = set(fragment.name for fragment in fragments)
-
-        for version, config in self.releases.items():
-            if 'fragments' not in config:
-                continue
-
-            invalid_fragments = set(fragment for fragment in config['fragments'] if fragment not in valid_fragments)
-            config['fragments'] = [fragment for fragment in config['fragments'] if fragment not in invalid_fragments]
-            self.known_fragments -= set(config['fragments'])
-
     def sort(self):
         """Sort change metadata in place."""
         for release, config in self.data['releases'].items():
-            if 'fragments' in config:
-                config['fragments'] = sorted(config['fragments'])
-
             if 'modules' in config:
                 config['modules'] = sorted(config['modules'])
 
@@ -182,22 +172,12 @@ class ChangesMetadata(object):
         else:
             LOGGER.warning('release %s already exists', version)
 
-    def add_fragment(self, fragment_name, version):
+    @abc.abstractmethod
+    def add_fragment(self, fragment, version):
         """Add a changelog fragment to the change metadata.
-        :type fragment_name: str
+        :type fragment: ChangelogFragment
         :type version: str
         """
-        if fragment_name in self.known_fragments:
-            return False
-
-        self.known_fragments.add(fragment_name)
-
-        if 'fragments' not in self.releases[version]:
-            self.releases[version]['fragments'] = []
-
-        fragments = self.releases[version]['fragments']
-        fragments.append(fragment_name)
-        return True
 
     def add_plugin(self, plugin_type, plugin_name, version):
         """Add a plugin to the change metadata.
@@ -228,5 +208,101 @@ class ChangesMetadata(object):
                 plugins[plugin_type] = []
 
             plugins[plugin_type].append(plugin_name)
+
+        return True
+
+
+class ChangesMetadata(ChangesBase):
+    """Read, write and manage change metadata."""
+    def __init__(self, path):
+        super(ChangesMetadata, self).__init__(path)
+        self.known_fragments = set()
+        self.load()
+
+    def load(self):
+        """Load the change metadata from disk."""
+        super(ChangesMetadata, self).load()
+
+        for version, config in self.releases.items():
+            self.known_fragments |= set(config.get('fragments', []))
+
+    def prune_fragments(self, fragments):
+        """Remove fragments which are not in the provided list of fragments.
+        :type fragments: list[ChangelogFragment]
+        """
+        valid_fragments = set(fragment.name for fragment in fragments)
+
+        for version, config in self.releases.items():
+            if 'fragments' not in config:
+                continue
+
+            invalid_fragments = set(fragment for fragment in config['fragments'] if fragment not in valid_fragments)
+            config['fragments'] = [fragment for fragment in config['fragments'] if fragment not in invalid_fragments]
+            self.known_fragments -= set(config['fragments'])
+
+    def sort(self):
+        """Sort change metadata in place."""
+        super(ChangesMetadata, self).sort()
+
+        for release, config in self.data['releases'].items():
+            if 'fragments' in config:
+                config['fragments'] = sorted(config['fragments'])
+
+    def add_fragment(self, fragment, version):
+        """Add a changelog fragment to the change metadata.
+        :type fragment: ChangelogFragment
+        :type version: str
+        """
+        if fragment.name in self.known_fragments:
+            return False
+
+        self.known_fragments.add(fragment.name)
+
+        if 'fragments' not in self.releases[version]:
+            self.releases[version]['fragments'] = []
+
+        fragments = self.releases[version]['fragments']
+        fragments.append(fragment.name)
+        return True
+
+
+class ChangesData(ChangesBase):
+    """Read, write and manage change data."""
+    def __init__(self, config, path):
+        super(ChangesData, self).__init__(path)
+        self.config = config
+        self.load()
+
+    def sort(self):
+        """Sort change metadata in place."""
+        super(ChangesData, self).sort()
+
+        for release, config in self.data['releases'].items():
+            if 'changes' in config:
+                config['changes'] = {
+                    section: sorted(entries) if section != self.config.prelude_name else entries
+                    for section, entries in sorted(config['changes'].items())
+                }
+
+    def add_fragment(self, fragment, version):
+        """Add a changelog fragment to the change metadata.
+        :type fragment: ChangelogFragment
+        :type version: str
+        """
+        if 'changes' not in self.releases[version]:
+            self.releases[version]['changes'] = dict()
+        changes = self.releases[version]['changes']
+
+        for section, lines in fragment.content.items():
+            if section == self.config.prelude_name:
+                if section in changes:
+                    raise ValueError('Found prelude section "{0}" more than once!'.format(section))
+                changes[section] = lines
+            elif section not in self.config.sections:
+                raise ValueError('Found unknown section "{0}"'.format(section))
+            else:
+                if section not in changes:
+                    changes[section] = []
+                changes[section].extend(lines)
 
         return True

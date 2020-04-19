@@ -80,6 +80,9 @@ class ChangelogConfig(object):
         self.release_tag_re = self.config.get('release_tag_re', r'((?:[\d.ab]|rc)+)')
         self.pre_release_tag_re = self.config.get('pre_release_tag_re', r'(?P<pre_release>\.\d+(?:[ab]|rc)+\d*)$')
         self.changes_file = self.config.get('changes_file', '.changes.yml')
+        self.changes_format = self.config.get('changes_format', 'classic')
+        if self.changes_format not in ('classic', 'combined'):
+            raise ValueError('changes_format must be one of "classic" and "combined"')
 
         self.sections = collections.OrderedDict([(self.prelude_name, self.prelude_title)])
 
@@ -93,6 +96,7 @@ class ChangelogConfig(object):
         config = {
             'notesdir': self.notes_dir,
             'changes_file': self.changes_file,
+            'changes_format': self.changes_format,
             'prelude_section_name': self.prelude_name,
             'prelude_section_title': self.prelude_title,
             'new_plugins_after_name': self.new_plugins_after_name,
@@ -121,6 +125,7 @@ class ChangelogConfig(object):
     def default():
         config = {
             'changes_file': 'changelog.yml',
+            'changes_format': 'combined',
             'release_tag_re': r'(v(?:[\d.ab\-]|rc)+)',  # from Ansible's config.yml
             'pre_release_tag_re': r'(?P<pre_release>(?:[ab]|rc)+\d*)$',  # from Ansible's config.yml
             'new_plugins_after_name': 'removed_features',
