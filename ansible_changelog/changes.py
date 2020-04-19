@@ -56,13 +56,15 @@ def add_release(config, changes, plugins, fragments, version, codename, date):
     for plugin in plugins:
         changes.add_plugin(plugin.type, plugin.name, version)
 
+    fragments_added = []
     for fragment in fragments:
-        changes.add_fragment(fragment, version)
+        if changes.add_fragment(fragment, version):
+            fragments_added.append(fragment)
 
     changes.save()
 
-    if config.changes_format != 'classic':
-        for fragment in fragments:
+    if not config.keep_fragments:
+        for fragment in fragments_added:
             fragment.remove()
 
 
@@ -278,6 +280,9 @@ class ChangesData(ChangesBase):
         super(ChangesData, self).sort()
 
         for release, config in self.data['releases'].items():
+            if 'fragments' in config:
+                config['fragments'] = sorted(config['fragments'])
+
             if 'changes' in config:
                 config['changes'] = {
                     section: sorted(entries) if section != self.config.prelude_name else entries
@@ -289,9 +294,15 @@ class ChangesData(ChangesBase):
         :type fragment: ChangelogFragment
         :type version: str
         """
+        if 'fragments' in self.releases[version] and fragment.name in self.releases[version]['fragments']:
+            return False
+
         if 'changes' not in self.releases[version]:
             self.releases[version]['changes'] = dict()
         changes = self.releases[version]['changes']
+
+        if 'fragments' not in self.releases[version]:
+            self.releases[version]['fragments'] = []
 
         for section, lines in fragment.content.items():
             if section == self.config.prelude_name:
@@ -305,4 +316,5 @@ class ChangesData(ChangesBase):
                     changes[section] = []
                 changes[section].extend(lines)
 
+        self.releases[version]['fragments'].append(fragment.name)
         return True

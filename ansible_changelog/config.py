@@ -81,8 +81,11 @@ class ChangelogConfig(object):
         self.pre_release_tag_re = self.config.get('pre_release_tag_re', r'(?P<pre_release>\.\d+(?:[ab]|rc)+\d*)$')
         self.changes_file = self.config.get('changes_file', '.changes.yml')
         self.changes_format = self.config.get('changes_format', 'classic')
+        self.keep_fragments = self.config.get('keep_fragments', self.changes_format == 'classic')
         if self.changes_format not in ('classic', 'combined'):
             raise ValueError('changes_format must be one of "classic" and "combined"')
+        if self.changes_format == 'classic' and not self.keep_fragments:
+            raise ValueError('changes_format == "classic" cannot be combined with keep_fragments == False')
 
         self.sections = collections.OrderedDict([(self.prelude_name, self.prelude_title)])
 
@@ -97,6 +100,7 @@ class ChangelogConfig(object):
             'notesdir': self.notes_dir,
             'changes_file': self.changes_file,
             'changes_format': self.changes_format,
+            'keep_fragments': self.keep_fragments,
             'prelude_section_name': self.prelude_name,
             'prelude_section_title': self.prelude_title,
             'new_plugins_after_name': self.new_plugins_after_name,
