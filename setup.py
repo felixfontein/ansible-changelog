@@ -34,7 +34,7 @@ setup(
     install_requires=['ansible>=2.9', 'docutils', 'rstcheck'],
     entry_points={
         'console_scripts': [
-            'ansible-changelog = ansible_changelog:main',
+            'ansible-changelog = ansible_changelog.cli:main',
         ],
     },
 )

@@ -5,7 +5,10 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+import collections
 import os
+
+import yaml
 
 
 class PathsConfig(object):
@@ -60,3 +63,74 @@ class PathsConfig(object):
             previous, base_dir = base_dir, os.path.dirname(base_dir)
             if previous == base_dir:
                 raise ValueError()
+
+
+class ChangelogConfig(object):
+    """Configuration for changelogs."""
+    def __init__(self, config):
+        """
+        :type config: dict
+        """
+        self.config = config
+
+        self.notes_dir = self.config.get('notesdir', 'fragments')
+        self.prelude_name = self.config.get('prelude_section_name', 'release_summary')
+        self.prelude_title = self.config.get('prelude_section_title', 'Release Summary')
+        self.new_plugins_after_name = self.config.get('new_plugins_after_name', '')
+        self.release_tag_re = self.config.get('release_tag_re', r'((?:[\d.ab]|rc)+)')
+        self.pre_release_tag_re = self.config.get('pre_release_tag_re', r'(?P<pre_release>\.\d+(?:[ab]|rc)+\d*)$')
+        self.changes_file = self.config.get('changes_file', '.changes.yml')
+
+        self.sections = collections.OrderedDict([(self.prelude_name, self.prelude_title)])
+
+        for section_name, section_title in self.config['sections']:
+            self.sections[section_name] = section_title
+
+    def store(self, path):
+        """
+        :type path: str
+        """
+        config = {
+            'notesdir': self.notes_dir,
+            'changes_file': self.changes_file,
+            'prelude_section_name': self.prelude_name,
+            'prelude_section_title': self.prelude_title,
+            'new_plugins_after_name': self.new_plugins_after_name,
+            'release_tag_re': self.release_tag_re,
+            'pre_release_tag_re': self.pre_release_tag_re,
+            'sections': [],
+        }
+        for k, v in self.sections.items():
+            if k == self.prelude_name and v == self.prelude_title:
+                continue
+            config['sections'].append([k, v])
+
+        with open(path, 'wb') as f:
+            yaml.safe_dump(config, f, default_flow_style=False, encoding='utf-8')
+
+    @staticmethod
+    def load(path):
+        """
+        :type path: str
+        """
+        with open(path, 'r') as config_fd:
+            config = yaml.safe_load(config_fd)
+        return ChangelogConfig(config)
+
+    @staticmethod
+    def default():
+        config = {
+            'changes_file': 'changelog.yml',
+            'release_tag_re': r'(v(?:[\d.ab\-]|rc)+)',  # from Ansible's config.yml
+            'pre_release_tag_re': r'(?P<pre_release>(?:[ab]|rc)+\d*)$',  # from Ansible's config.yml
+            'new_plugins_after_name': 'removed_features',
+            'sections': [
+                ['major_changes', 'Major Changes'],
+                ['minor_changes', 'Minor Changes'],
+                ['deprecated_features', 'Deprecated Features'],
+                ['removed_features', 'Removed Features (previously deprecated)'],
+                ['bugfixes', 'Bugfixes'],
+                ['known_issues', 'Known Issues'],
+            ],
+        }
+        return ChangelogConfig(config)
