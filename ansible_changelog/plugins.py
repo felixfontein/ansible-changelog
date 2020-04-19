@@ -25,6 +25,13 @@ def load_plugin_metadata(paths, plugin_type, collection_name):
     output = subprocess.check_output(command)
     plugins_list = json.loads(to_text(output))
 
+    if not collection_name:
+        # Filter out FQCNs
+        plugins_list = {
+            name: data for name, data in plugins_list.items()
+            if '.' not in name or name.startswith('ansible.builtin.')
+        }
+
     result = dict()
     if not plugins_list:
         return result
