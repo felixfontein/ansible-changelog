@@ -54,24 +54,25 @@ def set_paths(force=None):
 
     previous = None
     BASE_DIR = os.getcwd()
-    while BASE_DIR != previous:
+    while True:
         CHANGELOG_DIR = os.path.join(BASE_DIR, 'changelogs')
         CONFIG_PATH = os.path.join(CHANGELOG_DIR, 'config.yaml')
         if os.path.exists(CHANGELOG_DIR) and os.path.exists(CONFIG_PATH):
-            break
+            GALAXY_PATH = os.path.join(BASE_DIR, 'galaxy.yml')
+            if os.path.exists(GALAXY_PATH):
+                # We are in a collection and assume ansible-doc is available in $PATH
+                ANSIBLE_DOC_PATH = 'ansible-doc'
+                return
+            if os.path.exists(os.path.join(BASE_DIR, 'lib')) and os.path.exists(os.path.join(BASE_DIR, 'lib', 'ansible')):
+                # We are in a checkout of ansible/ansible
+                GALAXY_PATH = None
+                ANSIBLE_DOC_PATH = os.path.join(BASE_DIR, 'bin', 'ansible-doc')
+                return
         previous, BASE_DIR = BASE_DIR, os.path.dirname(BASE_DIR)
         if previous == BASE_DIR:
             print("Only the 'init' command can be used outside an Ansible checkout and outside"
                   " a collection repository set up to use Ansible's changelog generator.\n")
             sys.exit(3)
-
-    GALAXY_PATH = os.path.join(BASE_DIR, 'galaxy.yml')
-    if os.path.exists(GALAXY_PATH):
-        # We are in a collection and assume ansible-doc is available in $PATH
-        ANSIBLE_DOC_PATH = 'ansible-doc'
-    else:
-        ANSIBLE_DOC_PATH = os.path.join(BASE_DIR, 'bin', 'ansible-doc')
-        GALAXY_PATH = None
 
 
 def main():
