@@ -34,7 +34,7 @@ def generate_changelog(paths, config, changes, plugins, fragments):
     major_minor_version = '.'.join(changes.latest_version.split('.')[:2])
     changelog_path = os.path.join(paths.changelog_dir, 'CHANGELOG-v%s.rst' % major_minor_version)
 
-    generator = ChangelogGenerator(paths, config, changes, plugins, fragments)
+    generator = ChangelogGenerator(config, changes, plugins, fragments)
     rst = generator.generate()
 
     with open(changelog_path, 'wb') as changelog_fd:
@@ -43,15 +43,13 @@ def generate_changelog(paths, config, changes, plugins, fragments):
 
 class ChangelogGenerator(object):
     """Changelog generator."""
-    def __init__(self, paths, config, changes, plugins, fragments):
+    def __init__(self, config, changes, plugins, fragments):
         """
-        :type paths: PathsConfig
         :type config: ChangelogConfig
         :type changes: ChangesBase
         :type plugins: list[PluginDescription]
         :type fragments: list[ChangelogFragment]
         """
-        self.paths = paths
         self.config = config
         self.changes = changes
         self.plugins = {}
@@ -146,15 +144,11 @@ class ChangelogGenerator(object):
                 entry_config['plugins'][plugin_type] += plugin_names
 
         builder = RstBuilder()
-        if self.paths.galaxy_path:
-            galaxy = load_galaxy_metadata(self.paths)
-            collection_name = '{0}.{1}'.format(galaxy['namespace'].title(), galaxy['name'].title())
-            if codename:
-                builder.set_title('%s %s "%s" Release Notes' % (collection_name, major_minor_version, codename))
-            else:
-                builder.set_title('%s %s Release Notes' % (collection_name, major_minor_version))
+        title = self.config.title or 'Ansible'
+        if codename:
+            builder.set_title('%s %s "%s" Release Notes' % (title, major_minor_version, codename))
         else:
-            builder.set_title('Ansible %s "%s" Release Notes' % (major_minor_version, codename))
+            builder.set_title('%s %s Release Notes' % (title, major_minor_version))
         builder.add_raw_rst('.. contents:: Topics\n\n')
 
         for version, release in release_entries.items():

@@ -73,6 +73,7 @@ class ChangelogConfig(object):
         """
         self.config = config
 
+        self.title = self.config.get('title')
         self.notes_dir = self.config.get('notesdir', 'fragments')
         self.prelude_name = self.config.get('prelude_section_name', 'release_summary')
         self.prelude_title = self.config.get('prelude_section_title', 'Release Summary')
@@ -108,6 +109,8 @@ class ChangelogConfig(object):
             'pre_release_tag_re': self.pre_release_tag_re,
             'sections': [],
         }
+        if self.title is not None:
+            config['title'] = self.title
         for k, v in self.sections.items():
             if k == self.prelude_name and v == self.prelude_title:
                 continue
@@ -126,7 +129,7 @@ class ChangelogConfig(object):
         return ChangelogConfig(config)
 
     @staticmethod
-    def default():
+    def default(title=None):
         config = {
             'changes_file': 'changelog.yml',
             'changes_format': 'combined',
@@ -142,4 +145,6 @@ class ChangelogConfig(object):
                 ['known_issues', 'Known Issues'],
             ],
         }
+        if title is not None:
+            config['title'] = title
         return ChangelogConfig(config)
