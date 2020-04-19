@@ -44,9 +44,24 @@ def load_plugin_metadata(paths, plugin_type, collection_name):
     for name, data in plugins_data.items():
         namespace = None
         if collection_name and name.startswith(collection_name + '.'):
-            namespace = collection_name
             name = name[len(collection_name) + 1:]
         docs = data.get('doc') or dict()
+        if plugin_type == 'module':
+            filename = docs.get('filename')
+            if filename:
+                if collection_name:
+                    path = os.path.relpath(filename, os.path.join(paths.base_dir, 'plugins', 'modules'))
+                else:
+                    path = os.path.relpath(filename, os.path.join(paths.base_dir, 'lib', 'ansible', 'modules'))
+                path = os.path.split(path)[0]
+                namespace = []
+                while True:
+                    (path, last), prev = os.path.split(path), path
+                    if path == prev:
+                        break
+                    if last not in ('', '.', '..'):
+                        namespace.insert(0, last)
+                namespace = '.'.join(namespace)
         result[name] = {
             'description': docs.get('short_description'),
             'name': name,
