@@ -18,13 +18,14 @@ from .rst import RstBuilder
 from .utils import LOGGER, load_galaxy_metadata, is_release_version
 
 
-def generate_changelog(paths, config, changes, plugins, fragments):
+def generate_changelog(paths, config, changes, plugins, fragments, flatmap=True):
     """Generate the changelog.
     :type paths: PathsConfig
     :type config: ChangelogConfig
     :type changes: ChangesBase
     :type plugins: list[PluginDescription]
     :type fragments: list[ChangelogFragment]
+    :type flatmap: bool
     """
     changes.prune_plugins(plugins)
     if config.changes_format == 'classic':
@@ -34,7 +35,7 @@ def generate_changelog(paths, config, changes, plugins, fragments):
     major_minor_version = '.'.join(changes.latest_version.split('.')[:2])
     changelog_path = os.path.join(paths.changelog_dir, 'CHANGELOG-v%s.rst' % major_minor_version)
 
-    generator = ChangelogGenerator(config, changes, plugins, fragments)
+    generator = ChangelogGenerator(config, changes, plugins, fragments, flatmap)
     rst = generator.generate()
 
     with open(changelog_path, 'wb') as changelog_fd:
@@ -43,17 +44,19 @@ def generate_changelog(paths, config, changes, plugins, fragments):
 
 class ChangelogGenerator(object):
     """Changelog generator."""
-    def __init__(self, config, changes, plugins, fragments):
+    def __init__(self, config, changes, plugins, fragments, flatmap):
         """
         :type config: ChangelogConfig
         :type changes: ChangesBase
         :type plugins: list[PluginDescription]
         :type fragments: list[ChangelogFragment]
+        :type flatmap: bool
         """
         self.config = config
         self.changes = changes
         self.plugins = {}
         self.modules = []
+        self.flatmap = flatmap
 
         for plugin in plugins:
             if plugin.type == 'module':
@@ -163,7 +166,7 @@ class ChangelogGenerator(object):
                 self._add_section(builder, combined_fragments, section_name)
 
             self._add_plugins(builder, release['plugins'])
-            self._add_modules(builder, release['modules'])
+            self._add_modules(builder, release['modules'], flatmap=self.flatmap)
 
         return builder.generate()
 
@@ -210,7 +213,7 @@ class ChangelogGenerator(object):
 
             builder.add_raw_rst('')
 
-    def _add_modules(self, builder, module_names):
+    def _add_modules(self, builder, module_names, flatmap):
         if not module_names:
             return
 
@@ -245,6 +248,10 @@ class ChangelogGenerator(object):
             for module_name in modules_by_namespace[namespace]:
                 module = modules[module_name]
 
-                builder.add_raw_rst('- %s - %s' % (module.name, module.description))
+                module_name = module.name
+                if not flatmap and namespace:
+                    module_name = '%s.%s' % (namespace, module_name)
+
+                builder.add_raw_rst('- %s - %s' % (module_name, module.description))
 
             builder.add_raw_rst('')

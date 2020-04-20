@@ -187,6 +187,11 @@ def command_release(args):
 
     config = ChangelogConfig.load(paths.config_path)
 
+    flatmap = True
+    if paths.galaxy_path is not None:
+        galaxy = load_galaxy_metadata(paths)
+        flatmap = galaxy.get('type', '') == 'flatmap'
+
     if not version or not codename:
         if paths.galaxy_path is None:
             import ansible.release
@@ -195,14 +200,13 @@ def command_release(args):
             codename = codename or ansible.release.__codename__
 
         elif not version:
-            galaxy = load_galaxy_metadata(paths)
             version = galaxy['version']
 
     changes = load_changes(paths, config)
     plugins = load_plugins(paths=paths, version=version, force_reload=reload_plugins)
     fragments = load_fragments(paths, config)
     add_release(config, changes, plugins, fragments, version, codename, date)
-    generate_changelog(paths, config, changes, plugins, fragments)
+    generate_changelog(paths, config, changes, plugins, fragments, flatmap=flatmap)
 
 
 def command_generate(args):
@@ -215,13 +219,18 @@ def command_generate(args):
 
     config = ChangelogConfig.load(paths.config_path)
 
+    flatmap = True
+    if paths.galaxy_path is not None:
+        galaxy = load_galaxy_metadata(paths)
+        flatmap = galaxy.get('type', '') == 'flatmap'
+
     changes = load_changes(paths, config)
     if not changes.has_release:
         print('Cannot create changelog when not at least one release has been added.')
         sys.exit(2)
     plugins = load_plugins(paths=paths, version=changes.latest_version, force_reload=reload_plugins)
     fragments = load_fragments(paths, config)
-    generate_changelog(paths, config, changes, plugins, fragments)
+    generate_changelog(paths, config, changes, plugins, fragments, flatmap=flatmap)
 
 
 def lint_fragments(config, fragments, exceptions):
