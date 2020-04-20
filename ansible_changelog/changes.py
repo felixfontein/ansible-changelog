@@ -15,6 +15,7 @@ import yaml
 
 from ansible.module_utils import six
 
+from .plugins import load_plugins, PluginResolver, SimplePluginResolver
 from .utils import LOGGER, is_release_version
 
 
@@ -26,7 +27,7 @@ def load_changes(paths, config):
     """
     path = os.path.join(paths.changelog_dir, config.changes_file)
     if config.changes_format == 'classic':
-        changes = ChangesMetadata(path)
+        changes = ChangesMetadata(paths, path)
     else:
         changes = ChangesData(config, path)
 
@@ -54,7 +55,7 @@ def add_release(config, changes, plugins, fragments, version, codename, date):
     changes.add_release(version, codename, date)
 
     for plugin in plugins:
-        changes.add_plugin(plugin.type, plugin.name, version)
+        changes.add_plugin(plugin, version)
 
     fragments_added = []
     for fragment in fragments:
@@ -113,6 +114,99 @@ class ChangesBase(object):
         else:
             self.data = self.empty()
 
+    @abc.abstractmethod
+    def prune_plugins(self, plugins):
+        """Remove plugins which are not in the provided list of plugins.
+        :type plugins: list[PluginDescription]
+        """
+
+    @abc.abstractmethod
+    def sort(self):
+        """Sort change metadata in place."""
+
+    def save(self):
+        """Save the change metadata to disk."""
+        self.sort()
+
+        with open(self.path, 'w') as config_fd:
+            yaml.safe_dump(self.data, config_fd, default_flow_style=False)
+
+    def add_release(self, version, codename, release_date):
+        """Add a new releases to the changes metadata.
+        :type version: str
+        :type codename: str
+        :type release_date: datetime.date
+        """
+        if version not in self.releases:
+            self.releases[version] = dict(
+                release_date=str(release_date),
+            )
+            if codename:
+                self.releases[version]['codename'] = codename
+        else:
+            LOGGER.warning('release %s already exists', version)
+
+    @abc.abstractmethod
+    def add_fragment(self, fragment, version):
+        """Add a changelog fragment to the change metadata.
+        :type fragment: ChangelogFragment
+        :type version: str
+        """
+
+    def _create_plugin_entry(self, plugin):
+        return plugin.name
+
+    def add_plugin(self, plugin, version):
+        """Add a plugin to the change metadata.
+        :type plugin: PluginDescription
+        :type version: str
+        """
+        composite_name = '%s/%s' % (plugin.type, plugin.name)
+
+        if composite_name in self.known_plugins:
+            return False
+
+        self.known_plugins.add(composite_name)
+
+        if plugin.type == 'module':
+            if 'modules' not in self.releases[version]:
+                self.releases[version]['modules'] = []
+
+            modules = self.releases[version]['modules']
+            modules.append(self._create_plugin_entry(plugin))
+        else:
+            if 'plugins' not in self.releases[version]:
+                self.releases[version]['plugins'] = {}
+
+            plugins = self.releases[version]['plugins']
+
+            if plugin.type not in plugins:
+                plugins[plugin.type] = []
+
+            plugins[plugin.type].append(self._create_plugin_entry(plugin))
+
+        return True
+
+    @abc.abstractmethod
+    def get_plugin_resolver(self, plugins=None):
+        """Load plugins from ansible-doc.
+        :type plugins: list[PluginDescription] | None
+        :rtype: PluginResolver
+        """
+
+
+class ChangesMetadata(ChangesBase):
+    """Read, write and manage change metadata."""
+    def __init__(self, paths, path):
+        super(ChangesMetadata, self).__init__(path)
+        self.paths = paths
+        self.known_fragments = set()
+        self.load()
+
+    def load(self):
+        """Load the change metadata from disk."""
+        super(ChangesMetadata, self).load()
+
         for version, config in self.releases.items():
             for plugin_type, plugin_names in config.get('plugins', {}).items():
                 self.known_plugins |= set('%s/%s' % (plugin_type, plugin_name) for plugin_name in plugin_names)
@@ -120,6 +214,22 @@ class ChangesBase(object):
             module_names = config.get('modules', [])
 
             self.known_plugins |= set('module/%s' % module_name for module_name in module_names)
+
+            self.known_fragments |= set(config.get('fragments', []))
+
+    def prune_fragments(self, fragments):
+        """Remove fragments which are not in the provided list of fragments.
+        :type fragments: list[ChangelogFragment]
+        """
+        valid_fragments = set(fragment.name for fragment in fragments)
+
+        for version, config in self.releases.items():
+            if 'fragments' not in config:
+                continue
+
+            invalid_fragments = set(fragment for fragment in config['fragments'] if fragment not in valid_fragments)
+            config['fragments'] = [fragment for fragment in config['fragments'] if fragment not in invalid_fragments]
+            self.known_fragments -= set(config['fragments'])
 
     def prune_plugins(self, plugins):
         """Remove plugins which are not in the provided list of plugins.
@@ -152,101 +262,6 @@ class ChangesBase(object):
                 for plugin_type in config['plugins']:
                     config['plugins'][plugin_type] = sorted(config['plugins'][plugin_type])
 
-    def save(self):
-        """Save the change metadata to disk."""
-        self.sort()
-
-        with open(self.path, 'w') as config_fd:
-            yaml.safe_dump(self.data, config_fd, default_flow_style=False)
-
-    def add_release(self, version, codename, release_date):
-        """Add a new releases to the changes metadata.
-        :type version: str
-        :type codename: str
-        :type release_date: datetime.date
-        """
-        if version not in self.releases:
-            self.releases[version] = dict(
-                release_date=str(release_date),
-            )
-            if codename:
-                self.releases[version]['codename'] = codename
-        else:
-            LOGGER.warning('release %s already exists', version)
-
-    @abc.abstractmethod
-    def add_fragment(self, fragment, version):
-        """Add a changelog fragment to the change metadata.
-        :type fragment: ChangelogFragment
-        :type version: str
-        """
-
-    def add_plugin(self, plugin_type, plugin_name, version):
-        """Add a plugin to the change metadata.
-        :type plugin_type: str
-        :type plugin_name: str
-        :type version: str
-        """
-        composite_name = '%s/%s' % (plugin_type, plugin_name)
-
-        if composite_name in self.known_plugins:
-            return False
-
-        self.known_plugins.add(composite_name)
-
-        if plugin_type == 'module':
-            if 'modules' not in self.releases[version]:
-                self.releases[version]['modules'] = []
-
-            modules = self.releases[version]['modules']
-            modules.append(plugin_name)
-        else:
-            if 'plugins' not in self.releases[version]:
-                self.releases[version]['plugins'] = {}
-
-            plugins = self.releases[version]['plugins']
-
-            if plugin_type not in plugins:
-                plugins[plugin_type] = []
-
-            plugins[plugin_type].append(plugin_name)
-
-        return True
-
-
-class ChangesMetadata(ChangesBase):
-    """Read, write and manage change metadata."""
-    def __init__(self, path):
-        super(ChangesMetadata, self).__init__(path)
-        self.known_fragments = set()
-        self.load()
-
-    def load(self):
-        """Load the change metadata from disk."""
-        super(ChangesMetadata, self).load()
-
-        for version, config in self.releases.items():
-            self.known_fragments |= set(config.get('fragments', []))
-
-    def prune_fragments(self, fragments):
-        """Remove fragments which are not in the provided list of fragments.
-        :type fragments: list[ChangelogFragment]
-        """
-        valid_fragments = set(fragment.name for fragment in fragments)
-
-        for version, config in self.releases.items():
-            if 'fragments' not in config:
-                continue
-
-            invalid_fragments = set(fragment for fragment in config['fragments'] if fragment not in valid_fragments)
-            config['fragments'] = [fragment for fragment in config['fragments'] if fragment not in invalid_fragments]
-            self.known_fragments -= set(config['fragments'])
-
-    def sort(self):
-        """Sort change metadata in place."""
-        super(ChangesMetadata, self).sort()
-
-        for release, config in self.data['releases'].items():
             if 'fragments' in config:
                 config['fragments'] = sorted(config['fragments'])
 
@@ -267,6 +282,47 @@ class ChangesMetadata(ChangesBase):
         fragments.append(fragment.name)
         return True
 
+    def get_plugin_resolver(self, plugins=None):
+        """Load plugins from ansible-doc.
+        :type plugins: list[PluginDescription] | None
+        :rtype: PluginResolver
+        """
+        if plugins is None:
+            plugins = load_plugins(paths=self.paths, version=self.latest_version, force_reload=False)
+        return SimplePluginResolver(plugins)
+
+
+class ChangesDataPluginResolver(PluginResolver):
+    def __init__(self, changes):
+        self.changes = changes
+        self.plugins = dict()
+        for version, config in changes.releases.items():
+            if 'modules' in config:
+                if 'module' not in self.plugins:
+                    self.plugins['module'] = dict()
+                for plugin in config['modules']:
+                    self.plugins['module'][plugin['name']] = plugin
+            if 'plugins' in config:
+                for plugin_type, plugins in config['plugins'].items():
+                    if plugin_type not in self.plugins:
+                        self.plugins[plugin_type] = dict()
+                    for plugin in plugins:
+                        self.plugins[plugin_type][plugin['name']] = plugin
+
+    def resolve(self, plugin_type, plugin_names):
+        """Return a list of PluginDescription objects from the given data.
+        :type plugin_type: str
+        :type plugin_names: list[str]
+        :rtype: list[dict]
+        """
+        if plugin_type not in self.plugins:
+            return []
+        return [
+            self.plugins[plugin_type][plugin_name]
+            for plugin_name in plugin_names
+            if plugin_name in self.plugins[plugin_type]
+        ]
+
 
 class ChangesData(ChangesBase):
     """Read, write and manage change data."""
@@ -275,11 +331,51 @@ class ChangesData(ChangesBase):
         self.config = config
         self.load()
 
+    def load(self):
+        """Load the change metadata from disk."""
+        super(ChangesData, self).load()
+
+        for version, config in self.releases.items():
+            for plugin_type, plugins in config.get('plugins', {}).items():
+                self.known_plugins |= set('%s/%s' % (plugin_type, plugin.name) for plugin in plugins)
+
+            modules = config.get('modules', [])
+
+            self.known_plugins |= set('module/%s' % module.name for module in modules)
+
+    def prune_plugins(self, plugins):
+        """Remove plugins which are not in the provided list of plugins.
+        :type plugins: list[PluginDescription]
+        """
+        valid_plugins = collections.defaultdict(set)
+
+        for plugin in plugins:
+            valid_plugins[plugin.type].add(plugin.name)
+
+        for version, config in self.releases.items():
+            if 'modules' in config:
+                invalid_module_names = set(module['name'] for module in config['modules'] if module['name'] not in valid_plugins['module'])
+                config['modules'] = [module for module in config['modules'] if module['name'] not in invalid_module_names]
+                self.known_plugins -= set('module/%s' % module_name for module_name in invalid_module_names)
+
+            if 'plugins' in config:
+                for plugin_type in config['plugins']:
+                    invalid_plugin_names = set(plugin['name'] for plugin in config['plugins'][plugin_type] if plugin['name'] not in valid_plugins[plugin_type])
+                    config['plugins'][plugin_type] = [plugin for plugin in config['plugins'][plugin_type] if plugin['name'] not in invalid_plugin_names]
+                    self.known_plugins -= set('%s/%s' % (plugin_type, plugin_name) for plugin_name in invalid_plugin_names)
+
     def sort(self):
         """Sort change metadata in place."""
         super(ChangesData, self).sort()
 
         for release, config in self.data['releases'].items():
+            if 'modules' in config:
+                config['modules'] = sorted(config['modules'], key=lambda module: module['name'])
+
+            if 'plugins' in config:
+                for plugin_type in config['plugins']:
+                    config['plugins'][plugin_type] = sorted(config['plugins'][plugin_type], key=lambda plugin: plugin['name'])
+
             if 'fragments' in config:
                 config['fragments'] = sorted(config['fragments'])
 
@@ -318,3 +414,17 @@ class ChangesData(ChangesBase):
 
         self.releases[version]['fragments'].append(fragment.name)
         return True
+
+    def _create_plugin_entry(self, plugin):
+        return dict(
+            name=plugin.name,
+            namespace=plugin.namespace,
+            description=plugin.description,
+        )
+
+    def get_plugin_resolver(self, plugins=None):
+        """Load plugins from ansible-doc.
+        :type plugins: list[PluginDescription] | None
+        :rtype: PluginResolver
+        """
+        return ChangesDataPluginResolver(self)

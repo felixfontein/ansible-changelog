@@ -15,7 +15,7 @@ from ansible.module_utils._text import to_bytes
 
 from .fragment import ChangelogFragment
 from .rst import RstBuilder
-from .utils import LOGGER, load_galaxy_metadata, is_release_version
+from .utils import LOGGER, is_release_version
 
 
 def generate_changelog(paths, config, changes, plugins, fragments, flatmap=True):
@@ -23,11 +23,12 @@ def generate_changelog(paths, config, changes, plugins, fragments, flatmap=True)
     :type paths: PathsConfig
     :type config: ChangelogConfig
     :type changes: ChangesBase
-    :type plugins: list[PluginDescription]
+    :type plugins: list[PluginDescription] | None
     :type fragments: list[ChangelogFragment]
     :type flatmap: bool
     """
-    changes.prune_plugins(plugins)
+    if plugins is not None:
+        changes.prune_plugins(plugins)
     if config.changes_format == 'classic':
         changes.prune_fragments(fragments)
     changes.save()
@@ -58,14 +59,7 @@ class ChangelogGenerator(object):
         self.modules = []
         self.flatmap = flatmap
 
-        for plugin in plugins:
-            if plugin.type == 'module':
-                self.modules.append(plugin)
-            else:
-                if plugin.type not in self.plugins:
-                    self.plugins[plugin.type] = []
-
-                self.plugins[plugin.type].append(plugin)
+        self.plugin_resolver = changes.get_plugin_resolver(plugins)
 
         self.fragments = dict((fragment.name, fragment) for fragment in fragments)
 
@@ -121,6 +115,14 @@ class ChangelogGenerator(object):
                     fragment_names.append(fragment_name)
 
                 entry_config['fragments'] += fragment_names
+
+                entry_config['modules'] += release.get('modules', [])
+
+                for plugin_type, plugin_names in release.get('plugins', {}).items():
+                    if plugin_type not in entry_config['plugins']:
+                        entry_config['plugins'][plugin_type] = []
+
+                    entry_config['plugins'][plugin_type] += plugin_names
             else:
                 changes = release.get('changes', dict())
                 dest_changes = entry_config['changes']
@@ -138,13 +140,13 @@ class ChangelogGenerator(object):
                     else:
                         dest_changes[section] = list(lines)
 
-            entry_config['modules'] += release.get('modules', [])
+                entry_config['modules'] += [module['name'] for module in release.get('modules', [])]
 
-            for plugin_type, plugin_names in release.get('plugins', {}).items():
-                if plugin_type not in entry_config['plugins']:
-                    entry_config['plugins'][plugin_type] = []
+                for plugin_type, plugins in release.get('plugins', {}).items():
+                    if plugin_type not in entry_config['plugins']:
+                        entry_config['plugins'][plugin_type] = []
 
-                entry_config['plugins'][plugin_type] += plugin_names
+                    entry_config['plugins'][plugin_type] += [plugin['name'] for plugin in plugins]
 
         builder = RstBuilder()
         title = self.config.title or 'Ansible'
@@ -194,8 +196,8 @@ class ChangelogGenerator(object):
 
         have_section = False
 
-        for plugin_type in sorted(self.plugins):
-            plugins = dict((plugin.name, plugin) for plugin in self.plugins[plugin_type] if plugin.name in plugin_types_and_names.get(plugin_type, []))
+        for plugin_type in sorted(plugin_types_and_names):
+            plugins = self.plugin_resolver.resolve(plugin_type, plugin_types_and_names.get(plugin_type, []))
 
             if not plugins:
                 continue
@@ -206,10 +208,8 @@ class ChangelogGenerator(object):
 
             builder.add_section(plugin_type.title(), 2)
 
-            for plugin_name in sorted(plugins):
-                plugin = plugins[plugin_name]
-
-                builder.add_raw_rst('- %s - %s' % (plugin.name, plugin.description))
+            for plugin in sorted(plugins, key=lambda plugin: plugin['name']):
+                builder.add_raw_rst('- %s - %s' % (plugin['name'], plugin['description']))
 
             builder.add_raw_rst('')
 
@@ -217,7 +217,7 @@ class ChangelogGenerator(object):
         if not module_names:
             return
 
-        modules = dict((module.name, module) for module in self.modules if module.name in module_names)
+        modules = dict((module['name'], module) for module in self.plugin_resolver.resolve('module', module_names))
         previous_section = None
 
         modules_by_namespace = collections.defaultdict(list)
@@ -225,7 +225,7 @@ class ChangelogGenerator(object):
         for module_name in sorted(modules):
             module = modules[module_name]
 
-            modules_by_namespace[module.namespace].append(module.name)
+            modules_by_namespace[module['namespace']].append(module)
 
         for namespace in sorted(modules_by_namespace):
             parts = namespace.split('.')
@@ -245,13 +245,11 @@ class ChangelogGenerator(object):
             if subsection:
                 builder.add_section(subsection, 3)
 
-            for module_name in modules_by_namespace[namespace]:
-                module = modules[module_name]
-
-                module_name = module.name
+            for module in modules_by_namespace[namespace]:
+                module_name = module['name']
                 if not flatmap and namespace:
                     module_name = '%s.%s' % (namespace, module_name)
 
-                builder.add_raw_rst('- %s - %s' % (module_name, module.description))
+                builder.add_raw_rst('- %s - %s' % (module_name, module['description']))
 
             builder.add_raw_rst('')

@@ -18,6 +18,8 @@ try:
 except ImportError:
     argcomplete = None
 
+from ansible.module_utils._text import to_native
+
 from .changelog_generator import generate_changelog
 from .changes import load_changes, add_release
 from .config import PathsConfig, ChangelogConfig
@@ -228,7 +230,10 @@ def command_generate(args):
     if not changes.has_release:
         print('Cannot create changelog when not at least one release has been added.')
         sys.exit(2)
-    plugins = load_plugins(paths=paths, version=changes.latest_version, force_reload=reload_plugins)
+    if reload_plugins:
+        plugins = load_plugins(paths=paths, version=changes.latest_version, force_reload=reload_plugins)
+    else:
+        plugins = None
     fragments = load_fragments(paths, config)
     generate_changelog(paths, config, changes, plugins, fragments, flatmap=flatmap)
 

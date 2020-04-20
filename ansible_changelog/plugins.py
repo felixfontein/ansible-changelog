@@ -6,6 +6,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 
+import abc
 import json
 import os
 import subprocess
@@ -13,6 +14,7 @@ import subprocess
 import yaml
 
 from ansible import constants as C
+from ansible.module_utils import six
 from ansible.module_utils._text import to_text
 
 from .utils import LOGGER, load_galaxy_metadata
@@ -145,3 +147,48 @@ class PluginDescription(object):
                 ))
 
         return plugins
+
+
+@six.add_metaclass(abc.ABCMeta)
+class PluginResolver(object):
+    @abc.abstractmethod
+    def resolve(self, plugin_type, plugin_names):
+        """Return a list of PluginDescription objects from the given data.
+        :type plugin_type: str
+        :type plugin_names: list[str]
+        :rtype: list[dict]
+        """
+
+
+class SimplePluginResolver(PluginResolver):
+    def _resolve_plugin(self, plugin):
+        return dict(
+            name=plugin.name,
+            namespace=plugin.namespace,
+            description=plugin.description,
+        )
+
+    def __init__(self, plugins):
+        """Return a list of PluginDescription objects from the given data.
+        :type plugins: dict(str, list[PluginDescription])
+        """
+        self.plugins = dict()
+        for plugin in plugins:
+            if plugin.type not in self.plugins:
+                self.plugins[plugin.type] = dict()
+
+            self.plugins[plugin.type][plugin.name] = self._resolve_plugin(plugin)
+
+    def resolve(self, plugin_type, plugin_names):
+        """Return a list of PluginDescription objects from the given data.
+        :type plugin_type: str
+        :type plugin_names: list[str]
+        :rtype: list[dict]
+        """
+        if plugin_type not in self.plugins:
+            return []
+        return [
+            self.plugins[plugin_type][plugin_name]
+            for plugin_name in plugin_names
+            if plugin_name in self.plugins[plugin_type]
+        ]
