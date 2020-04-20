@@ -32,8 +32,8 @@ def generate_changelog(paths, config, changes, plugins, fragments, flatmap=True)
         changes.prune_fragments(fragments)
     changes.save()
 
-    major_minor_version = '.'.join(changes.latest_version.split('.')[:2])
-    changelog_path = os.path.join(paths.changelog_dir, 'CHANGELOG-v%s.rst' % major_minor_version)
+    major_minor_version = '.'.join(changes.latest_version.split('.')[:config.changelog_filename_version_depth])
+    changelog_path = os.path.join(paths.changelog_dir, config.changelog_filename_template % major_minor_version)
 
     generator = ChangelogGenerator(config, changes, plugins, fragments, flatmap)
     rst = generator.generate()
@@ -75,7 +75,7 @@ class ChangelogGenerator(object):
         """
         latest_version = self.changes.latest_version
         codename = self.changes.releases[latest_version].get('codename')
-        major_minor_version = '.'.join(latest_version.split('.')[:2])
+        major_minor_version = '.'.join(latest_version.split('.')[:self.config.changelog_filename_version_depth])
 
         release_entries = collections.OrderedDict()
         entry_version = latest_version

@@ -83,6 +83,8 @@ class ChangelogConfig(object):
         self.changes_file = self.config.get('changes_file', '.changes.yaml')
         self.changes_format = self.config.get('changes_format', 'classic')
         self.keep_fragments = self.config.get('keep_fragments', self.changes_format == 'classic')
+        self.changelog_filename_template = self.config.get('changelog_filename_template', 'CHANGELOG-v%s.rst')
+        self.changelog_filename_version_depth = self.config.get('changelog_filename_version_depth', 2)
         if self.changes_format not in ('classic', 'combined'):
             raise ValueError('changes_format must be one of "classic" and "combined"')
         if self.changes_format == 'classic' and not self.keep_fragments:
@@ -102,6 +104,8 @@ class ChangelogConfig(object):
             'changes_file': self.changes_file,
             'changes_format': self.changes_format,
             'keep_fragments': self.keep_fragments,
+            'changelog_filename_template': self.changelog_filename_template,
+            'changelog_filename_version_depth': self.changelog_filename_version_depth,
             'prelude_section_name': self.prelude_name,
             'prelude_section_title': self.prelude_title,
             'new_plugins_after_name': self.new_plugins_after_name,
@@ -133,6 +137,7 @@ class ChangelogConfig(object):
         config = {
             'changes_file': 'changelog.yml',
             'changes_format': 'combined',
+            'changelog_filename_version_depth': 1,
             'release_tag_re': r'(v(?:[\d.ab\-]|rc)+)',  # from Ansible's config.yml
             'pre_release_tag_re': r'(?P<pre_release>(?:[ab]|rc)+\d*)$',  # from Ansible's config.yml
             'new_plugins_after_name': 'removed_features',
