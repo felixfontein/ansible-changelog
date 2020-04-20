@@ -232,7 +232,7 @@ class ChangelogGenerator(object):
             if not previous_section:
                 builder.add_section('New Modules', 1)
 
-            if section != previous_section:
+            if section != previous_section and section:
                 builder.add_section(section, 2)
 
             previous_section = section
