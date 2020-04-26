@@ -51,11 +51,20 @@ def load_plugin_metadata(paths, plugin_type, collection_name):
         if plugin_type == 'module':
             filename = docs.get('filename')
             if filename:
+                # Follow links
+                tried_links = set()
+                while os.path.islink(filename):
+                    if filename in tried_links:
+                        raise Exception('Found infinite symbolic link loop involving "{0}"'.format(filename))
+                    tried_links.add(filename)
+                    filename = os.path.join(os.path.dirname(filename), os.readlink(filename))
+                # Determine relative path
                 if collection_name:
                     path = os.path.relpath(filename, os.path.join(paths.base_dir, 'plugins', 'modules'))
                 else:
                     path = os.path.relpath(filename, os.path.join(paths.base_dir, 'lib', 'ansible', 'modules'))
                 path = os.path.split(path)[0]
+                # Extract namespace from relative path
                 namespace = []
                 while True:
                     (path, last), prev = os.path.split(path), path
