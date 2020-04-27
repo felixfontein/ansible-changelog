@@ -63,16 +63,13 @@ class ChangelogGenerator(object):
 
         self.fragments = dict((fragment.name, fragment) for fragment in fragments)
 
-    def generate(self):
+    def generate_to(self, builder, start_level=0):
         """Generate the changelog.
-        :rtype: str
+        :type builder: RstBuilder
+        :type start_level: int
         """
-        latest_version = self.changes.latest_version
-        codename = self.changes.releases[latest_version].get('codename')
-        major_minor_version = '.'.join(latest_version.split('.')[:self.config.changelog_filename_version_depth])
-
         release_entries = collections.OrderedDict()
-        entry_version = latest_version
+        entry_version = self.changes.latest_version
         entry_fragment = None
 
         for version in sorted(self.changes.releases, reverse=True, key=packaging.version.Version):
@@ -148,6 +145,28 @@ class ChangelogGenerator(object):
 
                     entry_config['plugins'][plugin_type] += [plugin['name'] for plugin in plugins]
 
+        for version, release in release_entries.items():
+            builder.add_section('v%s' % version, start_level)
+
+            if self.config.changes_format == 'classic':
+                combined_fragments = ChangelogFragment.combine([self.fragments[fragment] for fragment in release['fragments']])
+            else:
+                combined_fragments = release['changes']
+
+            for section_name in self.config.sections:
+                self._add_section(builder, combined_fragments, section_name, start_level=start_level)
+
+            self._add_plugins(builder, release['plugins'], start_level=start_level)
+            self._add_modules(builder, release['modules'], flatmap=self.flatmap, start_level=start_level)
+
+    def generate(self):
+        """Generate the changelog.
+        :rtype: str
+        """
+        latest_version = self.changes.latest_version
+        codename = self.changes.releases[latest_version].get('codename')
+        major_minor_version = '.'.join(latest_version.split('.')[:self.config.changelog_filename_version_depth])
+
         builder = RstBuilder()
         title = self.config.title or 'Ansible'
         if codename:
@@ -156,29 +175,17 @@ class ChangelogGenerator(object):
             builder.set_title('%s %s Release Notes' % (title, major_minor_version))
         builder.add_raw_rst('.. contents:: Topics\n\n')
 
-        for version, release in release_entries.items():
-            builder.add_section('v%s' % version)
-
-            if self.config.changes_format == 'classic':
-                combined_fragments = ChangelogFragment.combine([self.fragments[fragment] for fragment in release['fragments']])
-            else:
-                combined_fragments = release['changes']
-
-            for section_name in self.config.sections:
-                self._add_section(builder, combined_fragments, section_name)
-
-            self._add_plugins(builder, release['plugins'])
-            self._add_modules(builder, release['modules'], flatmap=self.flatmap)
+        self.generate_to(builder, 0)
 
         return builder.generate()
 
-    def _add_section(self, builder, combined_fragments, section_name):
+    def _add_section(self, builder, combined_fragments, section_name, start_level=0):
         if section_name not in combined_fragments:
             return
 
         section_title = self.config.sections[section_name]
 
-        builder.add_section(section_title, 1)
+        builder.add_section(section_title, start_level + 1)
 
         content = combined_fragments[section_name]
 
@@ -190,7 +197,7 @@ class ChangelogGenerator(object):
 
         builder.add_raw_rst('')
 
-    def _add_plugins(self, builder, plugin_types_and_names):
+    def _add_plugins(self, builder, plugin_types_and_names, start_level=0):
         if not plugin_types_and_names:
             return
 
@@ -204,16 +211,16 @@ class ChangelogGenerator(object):
 
             if not have_section:
                 have_section = True
-                builder.add_section('New Plugins', 1)
+                builder.add_section('New Plugins', start_level + 1)
 
-            builder.add_section(plugin_type.title(), 2)
+            builder.add_section(plugin_type.title(), start_level + 2)
 
             for plugin in sorted(plugins, key=lambda plugin: plugin['name']):
                 builder.add_raw_rst('- %s - %s' % (plugin['name'], plugin['description']))
 
             builder.add_raw_rst('')
 
-    def _add_modules(self, builder, module_names, flatmap):
+    def _add_modules(self, builder, module_names, flatmap, start_level=0):
         if not module_names:
             return
 
@@ -233,17 +240,17 @@ class ChangelogGenerator(object):
             section = parts.pop(0).replace('_', ' ').title()
 
             if not previous_section:
-                builder.add_section('New Modules', 1)
+                builder.add_section('New Modules', start_level + 1)
 
             if section != previous_section and section:
-                builder.add_section(section, 2)
+                builder.add_section(section, start_level + 2)
 
             previous_section = section
 
             subsection = '.'.join(parts)
 
             if subsection:
-                builder.add_section(subsection, 3)
+                builder.add_section(subsection, start_level + 3)
 
             for module in modules_by_namespace[namespace]:
                 module_name = module['name']
