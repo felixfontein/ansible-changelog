@@ -13,6 +13,7 @@ import os
 import shlex
 import subprocess
 
+import packaging.version
 import yaml
 
 from ansible_changelog.config import PathsConfig, ChangelogConfig
@@ -129,7 +130,6 @@ def main():
         paths = PathsConfig.force_collection(collection['path'])
         config = ChangelogConfig.load(paths.config_path)
         changes = load_changes(paths, config)
-        changes.prune_versions(collection['prev_version'], collection['version'])
         collection['path_config'] = paths
         collection['config'] = config
         collection['changes'] = changes
@@ -166,29 +166,33 @@ def main():
     builder.add_raw_rst('This is an example mockup of what the ACD changelog file could look like in RST.\n')
     builder.add_raw_rst('.. contents::\n  :local:\n  :depth: 2\n')
 
-    builder.add_section('v{0}'.format(ansible_changes.latest_version), 0)
+    previous_version = ansible['previous_version']
+    for version in sorted(ansible_changes.releases, key=packaging.version.Version):
+        builder.add_section('v{0}'.format(version), 0)
 
-    builder.add_section('Ansible Base', 1)
-    builder.add_raw_rst('.. contents::\n  :local:\n  :depth: 5\n')
-    major_minor_version = '.'.join(ansible_changes.latest_version.split('.')[:ansible_config.changelog_filename_version_depth])
-    generator = ChangelogGenerator(ansible_config, ansible_changes, plugins=ansible_plugins, fragments=ansible_fragments, flatmap=True)
-    generator.generate_to(builder, 1, squash=True)
-
-    for collection in collections:
-        major_minor_version = '.'.join(collection['changes'].latest_version.split('.')[:collection['config'].changelog_filename_version_depth])
-        generator = ChangelogGenerator(collection['config'], collection['changes'], plugins=None, fragments=[], flatmap=True)
-
-        builder.add_section(collection['config'].title, 1)
-        if collection['prev_version'] == '0.0.0':
-            builder.add_raw_rst('Changes for collection ``{0}`` until version {1}.\n'.format(collection['name'], collection['version']))
-        else:
-            builder.add_raw_rst('Changes for collection ``{0}`` after version {1} (included in the previous ACD version) until version {2}.\n'.format(
-                collection['name'], collection['prev_version'], collection['version']
-            ))
-
+        builder.add_section('Ansible Base', 1)
         builder.add_raw_rst('.. contents::\n  :local:\n  :depth: 5\n')
+        major_minor_version = '.'.join(ansible_changes.latest_version.split('.')[:ansible_config.changelog_filename_version_depth])
+        generator = ChangelogGenerator(ansible_config, ansible_changes, plugins=ansible_plugins, fragments=ansible_fragments, flatmap=True)
+        generator.generate_to(builder, 1, squash=True, after_version=previous_version, until_version=version)
 
-        generator.generate_to(builder, 1, squash=True)
+        for collection in collections:
+            major_minor_version = '.'.join(collection['changes'].latest_version.split('.')[:collection['config'].changelog_filename_version_depth])
+            generator = ChangelogGenerator(collection['config'], collection['changes'], plugins=None, fragments=[], flatmap=True)
+
+            builder.add_section(collection['config'].title, 1)
+            if collection['versions'][previous_version] == '0.0.0':
+                builder.add_raw_rst('Changes for collection ``{0}`` until version {1}.\n'.format(collection['name'], collection['versions'][version]))
+            else:
+                builder.add_raw_rst('Changes for collection ``{0}`` after version {1} (included in the previous ACD version) until version {2}.\n'.format(
+                    collection['name'], collection['versions'][previous_version], collection['versions'][version]
+                ))
+
+            builder.add_raw_rst('.. contents::\n  :local:\n  :depth: 5\n')
+
+            generator.generate_to(builder, 1, squash=True, after_version=collection['versions'][previous_version], until_version=collection['versions'][version])
+
+        previous_version = version
 
     with open('acd2.rst', 'wb') as changelog_fd:
         changelog_fd.write(builder.generate().encode('utf-8'))

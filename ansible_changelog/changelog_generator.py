@@ -63,16 +63,22 @@ class ChangelogGenerator(object):
 
         self.fragments = dict((fragment.name, fragment) for fragment in fragments)
 
-    def generate_to(self, builder, start_level=0, squash=False):
+    def generate_to(self, builder, start_level=0, squash=False, after_version=None, until_version=None):
         """Generate the changelog.
         :type builder: RstBuilder
         :type start_level: int
         """
         release_entries = collections.OrderedDict()
-        entry_version = self.changes.latest_version
+        entry_version = until_version or self.changes.latest_version
         entry_fragment = None
 
         for version in sorted(self.changes.releases, reverse=True, key=packaging.version.Version):
+            if after_version is not None:
+                if packaging.version.Version(version) <= packaging.version.Version(after_version):
+                    continue
+            if until_version is not None:
+                if packaging.version.Version(version) > packaging.version.Version(until_version):
+                    continue
             release = self.changes.releases[version]
 
             if not squash:
