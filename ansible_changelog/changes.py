@@ -428,3 +428,14 @@ class ChangesData(ChangesBase):
         :rtype: PluginResolver
         """
         return ChangesDataPluginResolver(self)
+
+    def prune_versions(self, versions_after, versions_until):
+        versions_after = packaging.version.Version(versions_after)
+        versions_until = packaging.version.Version(versions_until)
+        prune = []
+        for version in self.data['releases']:
+            v = packaging.version.Version(version)
+            if not (versions_after < v <= versions_until):
+                prune.add(version)
+        for version in prune:
+            del self.data['releases'][version]
