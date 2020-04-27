@@ -1,0 +1,20 @@
+---
+ansible:
+  repo: git@github.com:felixfontein/ansible.git
+  branch: changelog-2.10
+collections:
+  community.crypto:
+    repo: git@github.com:felixfontein/community.crypto.git
+    branch: changelog-1.0
+    version: '1.0.0'
+    prev_version: '0.0.0'
+  community.general:
+    repo: git@github.com:felixfontein/community.general.git
+    branch: changelog-1.0
+    version: '1.0.0'
+    prev_version: '0.0.0'
+  community.network:
+    repo: git@github.com:felixfontein/community.network.git
+    branch: changelog-1.0
+    version: '1.0.0'
+    prev_version: '0.0.0'
