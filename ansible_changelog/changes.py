@@ -337,11 +337,11 @@ class ChangesData(ChangesBase):
 
         for version, config in self.releases.items():
             for plugin_type, plugins in config.get('plugins', {}).items():
-                self.known_plugins |= set('%s/%s' % (plugin_type, plugin.name) for plugin in plugins)
+                self.known_plugins |= set('%s/%s' % (plugin_type, plugin['name']) for plugin in plugins)
 
             modules = config.get('modules', [])
 
-            self.known_plugins |= set('module/%s' % module.name for module in modules)
+            self.known_plugins |= set('module/%s' % module['name'] for module in modules)
 
     def prune_plugins(self, plugins):
         """Remove plugins which are not in the provided list of plugins.
