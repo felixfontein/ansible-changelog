@@ -35,12 +35,20 @@ class PathsConfig(object):
         self.ansible_doc_path = ansible_doc_path
 
     @staticmethod
-    def force(base_dir):
-        """Forces configuration with given base path.
+    def force_collection(base_dir):
+        """Forces configuration with given collection base path.
         :type base_dir: str
         """
         base_dir = os.path.abspath(base_dir)
         return PathsConfig(base_dir, os.path.join(base_dir, 'galaxy.yml'), None)
+
+    @staticmethod
+    def force_ansible(base_dir):
+        """Forces configuration with given Ansible Base base path.
+        :type base_dir: str
+        """
+        base_dir = os.path.abspath(base_dir)
+        return PathsConfig(base_dir, None, 'ansible-doc')
 
     @staticmethod
     def detect():

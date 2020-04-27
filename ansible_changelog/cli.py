@@ -30,7 +30,7 @@ from .utils import LOGGER, makedirs, load_galaxy_metadata
 
 def set_paths(force=None):
     if force:
-        paths = PathsConfig.force(force)
+        paths = PathsConfig.force_collection(force)
     else:
         try:
             paths = PathsConfig.detect()
