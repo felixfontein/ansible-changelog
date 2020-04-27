@@ -63,7 +63,7 @@ class ChangelogGenerator(object):
 
         self.fragments = dict((fragment.name, fragment) for fragment in fragments)
 
-    def generate_to(self, builder, start_level=0):
+    def generate_to(self, builder, start_level=0, squash=False):
         """Generate the changelog.
         :type builder: RstBuilder
         :type start_level: int
@@ -75,12 +75,13 @@ class ChangelogGenerator(object):
         for version in sorted(self.changes.releases, reverse=True, key=packaging.version.Version):
             release = self.changes.releases[version]
 
-            if is_release_version(self.config, version):
-                entry_version = version  # next version is a release, it needs its own entry
-                entry_fragment = None
-            elif not is_release_version(self.config, entry_version):
-                entry_version = version  # current version is a pre-release, next version needs its own entry
-                entry_fragment = None
+            if not squash:
+                if is_release_version(self.config, version):
+                    entry_version = version  # next version is a release, it needs its own entry
+                    entry_fragment = None
+                elif not is_release_version(self.config, entry_version):
+                    entry_version = version  # current version is a pre-release, next version needs its own entry
+                    entry_fragment = None
 
             if entry_version not in release_entries:
                 release_entries[entry_version] = dict(
@@ -146,7 +147,8 @@ class ChangelogGenerator(object):
                     entry_config['plugins'][plugin_type] += [plugin['name'] for plugin in plugins]
 
         for version, release in release_entries.items():
-            builder.add_section('v%s' % version, start_level)
+            if not squash:
+                builder.add_section('v%s' % version, start_level)
 
             if self.config.changes_format == 'classic':
                 combined_fragments = ChangelogFragment.combine([self.fragments[fragment] for fragment in release['fragments']])
