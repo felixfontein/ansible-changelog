@@ -489,7 +489,7 @@ Bugfixes
 Community.Crypto
 ----------------
 
-Changes for collection ``community.crypto`` after version 0.0.0 (included in the previous ACD version) until version 1.0.0.
+Changes for collection ``community.crypto`` until version 1.0.0.
 
 .. contents::
   :local:
@@ -560,7 +560,7 @@ New Modules
 Community.General
 -----------------
 
-Changes for collection ``community.general`` after version 0.0.0 (included in the previous ACD version) until version 1.0.0.
+Changes for collection ``community.general`` until version 1.0.0.
 
 .. contents::
   :local:
@@ -892,7 +892,7 @@ System
 Community.Network
 -----------------
 
-Changes for collection ``community.network`` after version 0.0.0 (included in the previous ACD version) until version 1.0.0.
+Changes for collection ``community.network`` until version 1.0.0.
 
 .. contents::
   :local:

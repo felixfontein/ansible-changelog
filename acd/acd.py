@@ -179,7 +179,7 @@ def main():
         generator = ChangelogGenerator(collection['config'], collection['changes'], plugins=None, fragments=[], flatmap=True)
 
         builder.add_section(collection['config'].title, 1)
-        if collection['prev_version'] != '0.0.0':
+        if collection['prev_version'] == '0.0.0':
             builder.add_raw_rst('Changes for collection ``{0}`` until version {1}.\n'.format(collection['name'], collection['version']))
         else:
             builder.add_raw_rst('Changes for collection ``{0}`` after version {1} (included in the previous ACD version) until version {2}.\n'.format(
