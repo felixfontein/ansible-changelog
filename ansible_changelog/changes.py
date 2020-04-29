@@ -11,6 +11,7 @@ import collections
 import os
 
 import packaging.version
+import semantic_version
 import yaml
 
 from ansible.module_utils import six
@@ -27,7 +28,7 @@ def load_changes(paths, config):
     """
     path = os.path.join(paths.changelog_dir, config.changes_file)
     if config.changes_format == 'classic':
-        changes = ChangesMetadata(paths, path)
+        changes = ChangesMetadata(paths, config, path)
     else:
         changes = ChangesData(config, path)
 
@@ -45,7 +46,8 @@ def add_release(config, changes, plugins, fragments, version, codename, date):
     :type date: datetime.date
     """
     # make sure the version parses
-    packaging.version.Version(version)
+    Version = semantic_version.Version if config.is_collection else packaging.version.Version
+    Version(version)
 
     LOGGER.info('release version %s is a %s version', version, 'release' if is_release_version(config, version) else 'pre-release')
 
@@ -72,10 +74,12 @@ def add_release(config, changes, plugins, fragments, version, codename, date):
 @six.add_metaclass(abc.ABCMeta)
 class ChangesBase(object):
     """Read, write and manage change metadata."""
-    def __init__(self, path):
+    def __init__(self, config, path):
+        self.config = config
         self.path = path
         self.data = self.empty()
         self.known_plugins = set()
+        self.Version = semantic_version.Version if self.config.is_collection else packaging.version.Version
 
     @staticmethod
     def empty():
@@ -90,7 +94,7 @@ class ChangesBase(object):
         """Latest version in the changes.
         :rtype: str
         """
-        return sorted(self.releases, reverse=True, key=packaging.version.Version)[0]
+        return sorted(self.releases, reverse=True, key=self.Version)[0]
 
     @property
     def has_release(self):
@@ -197,8 +201,8 @@ class ChangesBase(object):
 
 class ChangesMetadata(ChangesBase):
     """Read, write and manage change metadata."""
-    def __init__(self, paths, path):
-        super(ChangesMetadata, self).__init__(path)
+    def __init__(self, paths, config, path):
+        super(ChangesMetadata, self).__init__(config, path)
         self.paths = paths
         self.known_fragments = set()
         self.load()
@@ -327,7 +331,7 @@ class ChangesDataPluginResolver(PluginResolver):
 class ChangesData(ChangesBase):
     """Read, write and manage change data."""
     def __init__(self, config, path):
-        super(ChangesData, self).__init__(path)
+        super(ChangesData, self).__init__(config, path)
         self.config = config
         self.load()
 
@@ -430,11 +434,11 @@ class ChangesData(ChangesBase):
         return ChangesDataPluginResolver(self)
 
     def prune_versions(self, versions_after, versions_until):
-        versions_after = packaging.version.Version(versions_after)
-        versions_until = packaging.version.Version(versions_until)
+        versions_after = self.Version(versions_after)
+        versions_until = self.Version(versions_until)
         prune = []
         for version in self.data['releases']:
-            v = packaging.version.Version(version)
+            v = self.Version(version)
             if not (versions_after < v <= versions_until):
                 prune.add(version)
         for version in prune:

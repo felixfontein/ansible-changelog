@@ -75,12 +75,13 @@ class PathsConfig(object):
 
 class ChangelogConfig(object):
     """Configuration for changelogs."""
-    def __init__(self, config):
+    def __init__(self, is_collection, config):
         """
         :type config: dict
         """
         self.config = config
 
+        self.is_collection = is_collection
         self.title = self.config.get('title')
         self.notes_dir = self.config.get('notesdir', 'fragments')
         self.prelude_name = self.config.get('prelude_section_name', 'release_summary')
@@ -117,10 +118,13 @@ class ChangelogConfig(object):
             'prelude_section_name': self.prelude_name,
             'prelude_section_title': self.prelude_title,
             'new_plugins_after_name': self.new_plugins_after_name,
-            'release_tag_re': self.release_tag_re,
-            'pre_release_tag_re': self.pre_release_tag_re,
             'sections': [],
         }
+        if self.galaxy_path is None:
+            config.update({
+                'release_tag_re': self.release_tag_re,
+                'pre_release_tag_re': self.pre_release_tag_re,
+            })
         if self.title is not None:
             config['title'] = self.title
         for k, v in self.sections.items():
@@ -132,13 +136,14 @@ class ChangelogConfig(object):
             yaml.safe_dump(config, f, default_flow_style=False, encoding='utf-8')
 
     @staticmethod
-    def load(path):
+    def load(path, is_collection):
         """
         :type path: str
+        :type is_collection: bool
         """
         with open(path, 'r') as config_fd:
             config = yaml.safe_load(config_fd)
-        return ChangelogConfig(config)
+        return ChangelogConfig(is_collection, config)
 
     @staticmethod
     def default(title=None):

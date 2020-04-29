@@ -169,7 +169,7 @@ def command_lint(args):
 
     fragment_paths = args.fragments  # type: list
 
-    config = ChangelogConfig.load(paths.config_path)
+    config = ChangelogConfig.load(paths.config_path, paths.galaxy_path is not None)
 
     exceptions = []
     fragments = load_fragments(paths, config, fragment_paths, exceptions)
@@ -187,7 +187,7 @@ def command_release(args):
     date = datetime.datetime.strptime(args.date, "%Y-%m-%d").date()
     reload_plugins = args.reload_plugins  # type: bool
 
-    config = ChangelogConfig.load(paths.config_path)
+    config = ChangelogConfig.load(paths.config_path, paths.galaxy_path is not None)
 
     flatmap = True
     if paths.galaxy_path is not None:
@@ -219,7 +219,7 @@ def command_generate(args):
 
     reload_plugins = args.reload_plugins  # type: bool
 
-    config = ChangelogConfig.load(paths.config_path)
+    config = ChangelogConfig.load(paths.config_path, paths.galaxy_path is not None)
 
     flatmap = True
     if paths.galaxy_path is not None:

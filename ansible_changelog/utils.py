@@ -10,6 +10,7 @@ import logging
 import os
 import re
 
+import semantic_version
 import yaml
 
 
@@ -47,6 +48,9 @@ def is_release_version(config, version):
     :type version: str
     :rtype: bool
     """
+    if config.is_collection:
+        return not bool(semantic_version.Version(version).prerelease)
+
     tag_format = 'v%s' % version
 
     if re.search(config.pre_release_tag_re, tag_format):

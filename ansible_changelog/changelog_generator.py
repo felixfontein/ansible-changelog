@@ -10,6 +10,7 @@ import collections
 import os
 
 import packaging.version
+import semantic_version
 
 from ansible.module_utils._text import to_bytes
 
@@ -72,12 +73,14 @@ class ChangelogGenerator(object):
         entry_version = until_version or self.changes.latest_version
         entry_fragment = None
 
-        for version in sorted(self.changes.releases, reverse=True, key=packaging.version.Version):
+        Version = semantic_version.Version if self.config.is_collection else packaging.version.Version
+
+        for version in sorted(self.changes.releases, reverse=True, key=Version):
             if after_version is not None:
-                if packaging.version.Version(version) <= packaging.version.Version(after_version):
+                if Version(version) <= Version(after_version):
                     continue
             if until_version is not None:
-                if packaging.version.Version(version) > packaging.version.Version(until_version):
+                if Version(version) > Version(until_version):
                     continue
             release = self.changes.releases[version]
 

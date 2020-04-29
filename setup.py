@@ -1,4 +1,4 @@
-"""File Tree Subs"""
+"""Ansible Changelog"""
 
 from setuptools import setup, find_packages
 from codecs import open
@@ -30,7 +30,7 @@ setup(
     ],
     keywords='ansible changelog',
     packages=find_packages(),
-    install_requires=['ansible>=2.9', 'docutils', 'rstcheck'],
+    install_requires=['ansible>=2.9', 'docutils', 'rstcheck', 'packaging', 'semantic_version'],
     entry_points={
         'console_scripts': [
             'ansible-changelog = ansible_changelog.cli:main',
