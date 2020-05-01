@@ -94,6 +94,8 @@ class ChangelogConfig(object):
         self.keep_fragments = self.config.get('keep_fragments', self.changes_format == 'classic')
         self.changelog_filename_template = self.config.get('changelog_filename_template', 'CHANGELOG-v%s.rst')
         self.changelog_filename_version_depth = self.config.get('changelog_filename_version_depth', 2)
+        self.mention_ancestor = self.config.get('mention_ancestor', True)
+
         if self.changes_format not in ('classic', 'combined'):
             raise ValueError('changes_format must be one of "classic" and "combined"')
         if self.changes_format == 'classic' and not self.keep_fragments:
@@ -112,6 +114,7 @@ class ChangelogConfig(object):
             'notesdir': self.notes_dir,
             'changes_file': self.changes_file,
             'changes_format': self.changes_format,
+            'mention_ancestor': self.mention_ancestor,
             'keep_fragments': self.keep_fragments,
             'changelog_filename_template': self.changelog_filename_template,
             'changelog_filename_version_depth': self.changelog_filename_version_depth,

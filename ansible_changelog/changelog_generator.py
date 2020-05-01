@@ -184,7 +184,12 @@ class ChangelogGenerator(object):
             builder.set_title('%s %s "%s" Release Notes' % (title, major_minor_version, codename))
         else:
             builder.set_title('%s %s Release Notes' % (title, major_minor_version))
-        builder.add_raw_rst('.. contents:: Topics\n\n')
+        builder.add_raw_rst('.. contents:: Topics\n')
+
+        if self.changes.ancestor and self.config.mention_ancestor:
+            builder.add_raw_rst('This changelog describes changes after version {0}\n'.format(self.changes.ancestor))
+        else:
+            builder.add_raw_rst('')
 
         self.generate_to(builder, 0)
 
