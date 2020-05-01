@@ -178,7 +178,7 @@ class SimplePluginResolver(PluginResolver):
         )
 
     def __init__(self, plugins):
-        """Return a list of PluginDescription objects from the given data.
+        """
         :type plugins: dict(str, list[PluginDescription])
         """
         self.plugins = dict()

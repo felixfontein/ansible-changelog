@@ -6,11 +6,14 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 
+import abc
 import os
 
 import docutils.utils
 import rstcheck
 import yaml
+
+from ansible.module_utils import six
 
 try:
     from collections.abc import Mapping
@@ -145,3 +148,30 @@ class ChangelogFragmentLinter(object):
             errors.append((fragment.path, 0, 0, 'file must be a mapping not %s' % (type(fragment.content).__name__, )))
 
         return errors
+
+
+@six.add_metaclass(abc.ABCMeta)
+class FragmentResolver(object):
+    @abc.abstractmethod
+    def resolve(self, release):
+        """Return a list of ChangelogFragment objects from the given fragment names
+        :type release: dict
+        :rtype: list[ChangelogFragment]
+        """
+
+
+class SimpleFragmentResolver(FragmentResolver):
+    def __init__(self, fragments):
+        """
+        :type fragments: list[ChangelogFragment]
+        """
+        self.fragments = dict()
+        for fragment in fragments:
+            self.fragments[fragment.name] = fragment
+
+    def resolve(self, release):
+        """Return a list of ChangelogFragment objects from the given fragment names
+        :type release: dict
+        :rtype: list[ChangelogFragment]
+        """
+        return [self.fragments[fragment] for fragment in release.get('fragments', [])]

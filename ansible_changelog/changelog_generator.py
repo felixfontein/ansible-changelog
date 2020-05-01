@@ -14,23 +14,22 @@ import semantic_version
 
 from ansible.module_utils._text import to_bytes
 
-from .fragment import ChangelogFragment
 from .rst import RstBuilder
 from .utils import LOGGER, is_release_version
 
 
-def generate_changelog(paths, config, changes, plugins, fragments, flatmap=True):
+def generate_changelog(paths, config, changes, plugins=None, fragments=None, flatmap=True):
     """Generate the changelog.
     :type paths: PathsConfig
     :type config: ChangelogConfig
     :type changes: ChangesBase
     :type plugins: list[PluginDescription] | None
-    :type fragments: list[ChangelogFragment]
+    :type fragments: list[ChangelogFragment] | None
     :type flatmap: bool
     """
     if plugins is not None:
         changes.prune_plugins(plugins)
-    if config.changes_format == 'classic':
+    if fragments is not None and config.changes_format == 'classic':
         changes.prune_fragments(fragments)
     changes.save()
 
@@ -46,12 +45,12 @@ def generate_changelog(paths, config, changes, plugins, fragments, flatmap=True)
 
 class ChangelogGenerator(object):
     """Changelog generator."""
-    def __init__(self, config, changes, plugins, fragments, flatmap):
+    def __init__(self, config, changes, plugins=None, fragments=None, flatmap=True):
         """
         :type config: ChangelogConfig
         :type changes: ChangesBase
-        :type plugins: list[PluginDescription]
-        :type fragments: list[ChangelogFragment]
+        :type plugins: list[PluginDescription] | None
+        :type fragments: list[ChangelogFragment] | None
         :type flatmap: bool
         """
         self.config = config
@@ -61,8 +60,7 @@ class ChangelogGenerator(object):
         self.flatmap = flatmap
 
         self.plugin_resolver = changes.get_plugin_resolver(plugins)
-
-        self.fragments = dict((fragment.name, fragment) for fragment in fragments)
+        self.fragment_resolver = changes.get_fragment_resolver(fragments)
 
     def generate_to(self, builder, start_level=0, squash=False, after_version=None, until_version=None):
         """Generate the changelog.
@@ -97,32 +95,29 @@ class ChangelogGenerator(object):
                     modules=[],
                     plugins={},
                 )
-                if self.config.changes_format == 'classic':
-                    release_entries[entry_version]['fragments'] = []
-                else:
-                    release_entries[entry_version]['changes'] = dict()
+                release_entries[entry_version]['changes'] = dict()
 
             entry_config = release_entries[entry_version]
 
-            fragment_names = []
+            dest_changes = entry_config['changes']
 
-            if self.config.changes_format == 'classic':
-                # only keep the latest prelude fragment for an entry
-                for fragment_name in release.get('fragments', []):
-                    fragment = self.fragments[fragment_name]
-
-                    if self.config.prelude_name in fragment.content:
+            for fragment in self.fragment_resolver.resolve(release):
+                for section, lines in fragment.content.items():
+                    if section == self.config.prelude_name:
                         if entry_fragment:
-                            LOGGER.info('skipping fragment %s in version %s due to newer fragment %s in version %s',
-                                        fragment_name, version, entry_fragment, entry_version)
+                            LOGGER.info('skipping prelude in version %s due to newer prelude in version %s',
+                                        version, entry_version)
                             continue
 
-                        entry_fragment = fragment_name
+                        # lines is a str in this case!
+                        entry_fragment = lines
+                        dest_changes[section] = lines
+                    elif section in dest_changes:
+                        dest_changes[section].extend(lines)
+                    else:
+                        dest_changes[section] = list(lines)
 
-                    fragment_names.append(fragment_name)
-
-                entry_config['fragments'] += fragment_names
-
+            if self.config.changes_format == 'classic':
                 entry_config['modules'] += release.get('modules', [])
 
                 for plugin_type, plugin_names in release.get('plugins', {}).items():
@@ -131,22 +126,6 @@ class ChangelogGenerator(object):
 
                     entry_config['plugins'][plugin_type] += plugin_names
             else:
-                changes = release.get('changes', dict())
-                dest_changes = entry_config['changes']
-                for section, lines in changes.items():
-                    if section == self.config.prelude_name:
-                        if entry_fragment:
-                            LOGGER.info('skipping prelude in version %s due to newer prelude in version %s',
-                                        version, entry_version)
-                            continue
-
-                        entry_fragment = changes[self.config.prelude_name]
-                        dest_changes[section] = lines
-                    elif section in dest_changes:
-                        dest_changes[section].extend(lines)
-                    else:
-                        dest_changes[section] = list(lines)
-
                 entry_config['modules'] += [module['name'] for module in release.get('modules', [])]
 
                 for plugin_type, plugins in release.get('plugins', {}).items():
@@ -159,10 +138,7 @@ class ChangelogGenerator(object):
             if not squash:
                 builder.add_section('v%s' % version, start_level)
 
-            if self.config.changes_format == 'classic':
-                combined_fragments = ChangelogFragment.combine([self.fragments[fragment] for fragment in release['fragments']])
-            else:
-                combined_fragments = release['changes']
+            combined_fragments = release['changes']
 
             for section_name in self.config.sections:
                 self._add_section(builder, combined_fragments, section_name, start_level=start_level)

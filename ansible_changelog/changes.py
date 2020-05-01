@@ -16,6 +16,7 @@ import yaml
 
 from ansible.module_utils import six
 
+from .fragment import load_fragments, ChangelogFragment, FragmentResolver, SimpleFragmentResolver
 from .plugins import load_plugins, PluginResolver, SimplePluginResolver
 from .utils import LOGGER, is_release_version
 
@@ -197,9 +198,16 @@ class ChangesBase(object):
 
     @abc.abstractmethod
     def get_plugin_resolver(self, plugins=None):
-        """Load plugins from ansible-doc.
+        """
         :type plugins: list[PluginDescription] | None
         :rtype: PluginResolver
+        """
+
+    @abc.abstractmethod
+    def get_fragment_resolver(self, fragments=None):
+        """
+        :type fragments: list[ChangelogFragment] | None
+        :rtype: FragmentResolver
         """
 
 
@@ -291,13 +299,22 @@ class ChangesMetadata(ChangesBase):
         return True
 
     def get_plugin_resolver(self, plugins=None):
-        """Load plugins from ansible-doc.
+        """
         :type plugins: list[PluginDescription] | None
         :rtype: PluginResolver
         """
         if plugins is None:
             plugins = load_plugins(paths=self.paths, version=self.latest_version, force_reload=False)
         return SimplePluginResolver(plugins)
+
+    def get_fragment_resolver(self, fragments=None):
+        """
+        :type fragments: list[ChangelogFragment] | None
+        :rtype: FragmentResolver
+        """
+        if fragments is None:
+            fragments = load_fragments(paths=self.paths, config=self.config)
+        return SimpleFragmentResolver(fragments)
 
 
 class ChangesDataPluginResolver(PluginResolver):
@@ -330,6 +347,18 @@ class ChangesDataPluginResolver(PluginResolver):
             for plugin_name in plugin_names
             if plugin_name in self.plugins[plugin_type]
         ]
+
+
+class ChangesDataFragmentResolver(FragmentResolver):
+    def resolve(self, release):
+        """Return a list of ChangelogFragment objects from the given fragment names
+        :type release: dict
+        :rtype: list[ChangelogFragment]
+        """
+        changes = release.get('changes')
+        if changes is None:
+            return []
+        return [ChangelogFragment.from_dict(changes)]
 
 
 class ChangesData(ChangesBase):
@@ -431,11 +460,18 @@ class ChangesData(ChangesBase):
         )
 
     def get_plugin_resolver(self, plugins=None):
-        """Load plugins from ansible-doc.
+        """
         :type plugins: list[PluginDescription] | None
         :rtype: PluginResolver
         """
         return ChangesDataPluginResolver(self)
+
+    def get_fragment_resolver(self, fragments=None):
+        """
+        :type fragments: list[ChangelogFragment] | None
+        :rtype: FragmentResolver
+        """
+        return ChangesDataFragmentResolver()
 
     def prune_versions(self, versions_after, versions_until):
         versions_after = self.Version(versions_after)
