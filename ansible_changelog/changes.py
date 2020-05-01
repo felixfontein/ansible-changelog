@@ -113,9 +113,11 @@ class ChangesBase(object):
         """
         return self.data['releases']
 
-    def load(self):
+    def load(self, data_override=None):
         """Load the change metadata from disk."""
-        if os.path.exists(self.path):
+        if data_override is not None:
+            self.data = data_override
+        elif os.path.exists(self.path):
             with open(self.path, 'r') as meta_fd:
                 self.data = yaml.safe_load(meta_fd)
         else:
@@ -219,9 +221,9 @@ class ChangesMetadata(ChangesBase):
         self.known_fragments = set()
         self.load()
 
-    def load(self):
+    def load(self, data_override=None):
         """Load the change metadata from disk."""
-        super(ChangesMetadata, self).load()
+        super(ChangesMetadata, self).load(data_override=data_override)
 
         for version, config in self.releases.items():
             for plugin_type, plugin_names in config.get('plugins', {}).items():
@@ -363,14 +365,14 @@ class ChangesDataFragmentResolver(FragmentResolver):
 
 class ChangesData(ChangesBase):
     """Read, write and manage change data."""
-    def __init__(self, config, path):
+    def __init__(self, config, path, data_override=None):
         super(ChangesData, self).__init__(config, path)
         self.config = config
-        self.load()
+        self.load(data_override=data_override)
 
-    def load(self):
+    def load(self, data_override=None):
         """Load the change metadata from disk."""
-        super(ChangesData, self).load()
+        super(ChangesData, self).load(data_override=data_override)
 
         for version, config in self.releases.items():
             for plugin_type, plugins in config.get('plugins', {}).items():
@@ -474,12 +476,34 @@ class ChangesData(ChangesBase):
         return ChangesDataFragmentResolver()
 
     def prune_versions(self, versions_after, versions_until):
-        versions_after = self.Version(versions_after)
-        versions_until = self.Version(versions_until)
-        prune = []
-        for version in self.data['releases']:
+        """
+        :type versions_after: str | None
+        :type versions_until: str | None
+        """
+        versions_after = self.Version(versions_after) if versions_after is not None else None
+        versions_until = self.Version(versions_until) if versions_until is not None else None
+        for version in list(self.data['releases']):
             v = self.Version(version)
-            if not (versions_after < v <= versions_until):
-                prune.append(version)
-        for version in prune:
+            if versions_after is not None and v <= versions_after:
+                continue
+            if versions_until is not None and v > versions_until:
+                continue
             del self.data['releases'][version]
+
+    @staticmethod
+    def concatenate(changes_datas):
+        """
+        :type changes_datas: list[ChangesData]
+        :rtype: ChangesData
+        """
+        assert len(changes_datas) > 0
+        last = changes_datas[-1]
+        data = ChangesBase.empty()
+        ancestor = None
+        for changes in changes_datas:
+            data['releases'].update(changes.data['releases'])
+            if changes.ancestor is not None:
+                if ancestor is None or last.Version(ancestor) > last.Version(changes.ancestor):
+                    ancestor = changes.ancestor
+        data['ancestor'] = ancestor
+        return ChangesData(last.config, last.path, data)
