@@ -86,9 +86,9 @@ class ChangelogConfig(object):
         self.notes_dir = self.config.get('notesdir', 'fragments')
         self.prelude_name = self.config.get('prelude_section_name', 'release_summary')
         self.prelude_title = self.config.get('prelude_section_title', 'Release Summary')
-        self.new_plugins_after_name = self.config.get('new_plugins_after_name', '')
-        self.release_tag_re = self.config.get('release_tag_re', r'((?:[\d.ab]|rc)+)')
-        self.pre_release_tag_re = self.config.get('pre_release_tag_re', r'(?P<pre_release>\.\d+(?:[ab]|rc)+\d*)$')
+        self.new_plugins_after_name = self.config.get('new_plugins_after_name', '')  # not used
+        self.release_tag_re = self.config.get('release_tag_re', r'((?:[\d.ab]|rc)+)')  # only relevant for ansible-base
+        self.pre_release_tag_re = self.config.get('pre_release_tag_re', r'(?P<pre_release>\.\d+(?:[ab]|rc)+\d*)$')  # only relevant for ansible-base
         self.changes_file = self.config.get('changes_file', '.changes.yaml')
         self.changes_format = self.config.get('changes_format', 'classic')
         self.keep_fragments = self.config.get('keep_fragments', self.changes_format == 'classic')
