@@ -48,7 +48,7 @@ class PathsConfig(object):
         :type base_dir: str
         """
         base_dir = os.path.abspath(base_dir)
-        return PathsConfig(base_dir, None, 'ansible-doc')
+        return PathsConfig(base_dir, None, None)
 
     @staticmethod
     def detect():
