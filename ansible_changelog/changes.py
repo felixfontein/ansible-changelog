@@ -79,12 +79,14 @@ class ChangesBase(object):
         self.path = path
         self.data = self.empty()
         self.known_plugins = set()
+        self.ancestor = None
         self.Version = semantic_version.Version if self.config.is_collection else packaging.version.Version
 
     @staticmethod
     def empty():
         """Empty change metadata."""
         return dict(
+            ancestor=None,
             releases=dict(
             ),
         )
@@ -117,6 +119,7 @@ class ChangesBase(object):
                 self.data = yaml.safe_load(meta_fd)
         else:
             self.data = self.empty()
+        self.ancestor = self.data.get('ancestor')
 
     @abc.abstractmethod
     def prune_plugins(self, plugins):
@@ -131,6 +134,7 @@ class ChangesBase(object):
     def save(self):
         """Save the change metadata to disk."""
         self.sort()
+        self.data['ancestor'] = self.ancestor
 
         with open(self.path, 'w') as config_fd:
             yaml.safe_dump(self.data, config_fd, default_flow_style=False)
