@@ -149,7 +149,7 @@ class ChangelogConfig(object):
         return ChangelogConfig(is_collection, config)
 
     @staticmethod
-    def default(title=None):
+    def default(title=None, is_collection=True):
         config = {
             'changes_file': 'changelog.yaml',
             'changes_format': 'combined',
@@ -169,4 +169,4 @@ class ChangelogConfig(object):
         }
         if title is not None:
             config['title'] = title
-        return ChangelogConfig(config)
+        return ChangelogConfig(is_collection, config)

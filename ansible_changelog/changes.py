@@ -444,6 +444,6 @@ class ChangesData(ChangesBase):
         for version in self.data['releases']:
             v = self.Version(version)
             if not (versions_after < v <= versions_until):
-                prune.add(version)
+                prune.append(version)
         for version in prune:
             del self.data['releases'][version]

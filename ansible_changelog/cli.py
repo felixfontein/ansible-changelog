@@ -140,7 +140,8 @@ def command_init(args):
     galaxy = load_galaxy_metadata(paths)
 
     config = ChangelogConfig.default(
-        title='{0}.{1}'.format(galaxy['namespace'].title(), galaxy['name'].title())
+        title='{0}.{1}'.format(galaxy['namespace'].title(), galaxy['name'].title()),
+        is_collection=True,
     )
 
     fragments_dir = os.path.join(paths.changelog_dir, config.notes_dir)
