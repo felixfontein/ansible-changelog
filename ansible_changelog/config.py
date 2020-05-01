@@ -156,8 +156,10 @@ class ChangelogConfig(object):
             'sections': [
                 ['major_changes', 'Major Changes'],
                 ['minor_changes', 'Minor Changes'],
+                ['breaking_changes', 'Breaking Changes / Porting Guide'],
                 ['deprecated_features', 'Deprecated Features'],
                 ['removed_features', 'Removed Features (previously deprecated)'],
+                ['security_fixes', 'Security Fixes'],
                 ['bugfixes', 'Bugfixes'],
                 ['known_issues', 'Known Issues'],
             ],
