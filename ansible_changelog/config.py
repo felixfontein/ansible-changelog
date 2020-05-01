@@ -150,9 +150,8 @@ class ChangelogConfig(object):
         config = {
             'changes_file': 'changelog.yaml',
             'changes_format': 'combined',
-            'changelog_filename_version_depth': 1,
-            'release_tag_re': r'(v(?:[\d.ab\-]|rc)+)',  # from Ansible's config.yaml
-            'pre_release_tag_re': r'(?P<pre_release>(?:[ab]|rc)+\d*)$',  # from Ansible's config.yaml
+            'changelog_filename_template': 'CHANGELOG.rst',
+            'changelog_filename_version_depth': 0,
             'new_plugins_after_name': 'removed_features',
             'sections': [
                 ['major_changes', 'Major Changes'],
