@@ -42,7 +42,7 @@ releases:
 ```
 
 Release information
-~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^
 
 For a release `x.y.z`, the `releases` dictionary contains an entry `x.y.z` mapping to another dictionary. That dictionary can have the following entries:
 
@@ -98,7 +98,7 @@ releases:
 ```
 
 Changes
-^^^^^^^
+.......
 
 The `changes` dictionary contains different sections of the changelog for this version.
 
@@ -145,7 +145,7 @@ releases:
 ```
 
 Plugins and modules
-^^^^^^^^^^^^^^^^^^^
+...................
 
 The `modules` list should a be list of module plugin descriptions. The `plugins` dictionary should map plugin types to lists of plugin descriptions.
 
