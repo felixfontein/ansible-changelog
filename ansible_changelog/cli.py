@@ -190,18 +190,20 @@ def command_release(args):
     config = ChangelogConfig.load(paths.config_path, paths.galaxy_path is not None)
 
     flatmap = True
-    if paths.galaxy_path is not None:
+    if config.is_collection:
         galaxy = load_galaxy_metadata(paths)
         flatmap = galaxy.get('type', '') == 'flatmap'
 
     if not version or not codename:
-        if paths.galaxy_path is None:
+        if not config.is_collection:
+            # Both version and codename are required for Ansible (Base)
             import ansible.release
 
             version = version or ansible.release.__version__
             codename = codename or ansible.release.__codename__
 
         elif not version:
+            # Codename is not required for collections, only version is
             version = galaxy['version']
 
     changes = load_changes(paths, config)
@@ -222,7 +224,7 @@ def command_generate(args):
     config = ChangelogConfig.load(paths.config_path, paths.galaxy_path is not None)
 
     flatmap = True
-    if paths.galaxy_path is not None:
+    if config.is_collection:
         galaxy = load_galaxy_metadata(paths)
         flatmap = galaxy.get('type', '') == 'flatmap'
 

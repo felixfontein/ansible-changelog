@@ -120,7 +120,7 @@ class ChangelogConfig(object):
             'new_plugins_after_name': self.new_plugins_after_name,
             'sections': [],
         }
-        if self.galaxy_path is None:
+        if not self.is_collection:
             config.update({
                 'release_tag_re': self.release_tag_re,
                 'pre_release_tag_re': self.pre_release_tag_re,
