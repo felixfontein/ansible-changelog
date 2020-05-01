@@ -14,8 +14,7 @@ You can use the `ansible-changelog` tool to validate these files:
 (This only works for `changelog.yaml` files in collections, not for the corresponding files in ansible-base, since ansible-base currently does not conform to semantic versioning.)
 
 
-changelog.yaml
---------------
+## changelog.yaml
 
 The file must be named `changelogs.yaml` and stored in the `changelogs/` subdirectory of the collection root (i.e. the directory containing `galaxy.yml`). It must be a [YAML 1.1](https://yaml.org/spec/1.1/) file.
 
@@ -41,8 +40,7 @@ releases:
     ...
 ```
 
-Release information
-^^^^^^^^^^^^^^^^^^^
+### Release information
 
 For a release `x.y.z`, the `releases` dictionary contains an entry `x.y.z` mapping to another dictionary. That dictionary can have the following entries:
 
@@ -97,8 +95,7 @@ releases:
           namespace: null
 ```
 
-Changes
-.......
+#### Changes
 
 The `changes` dictionary contains different sections of the changelog for this version.
 
@@ -144,8 +141,7 @@ releases:
         - get - The module will no longer crash if it received invalid JSON data.
 ```
 
-Plugins and modules
-...................
+#### Plugins and modules
 
 The `modules` list should a be list of module plugin descriptions. The `plugins` dictionary should map plugin types to lists of plugin descriptions.
 
