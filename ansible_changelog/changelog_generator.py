@@ -27,11 +27,12 @@ def generate_changelog(paths, config, changes, plugins=None, fragments=None, fla
     :type fragments: list[ChangelogFragment] | None
     :type flatmap: bool
     """
-    if plugins is not None:
-        changes.prune_plugins(plugins)
-    if fragments is not None and config.changes_format == 'classic':
-        changes.prune_fragments(fragments)
-    changes.save()
+    if plugins is not None or fragments is not None:
+        if plugins is not None:
+            changes.prune_plugins(plugins)
+        if fragments is not None and config.changes_format == 'classic':
+            changes.prune_fragments(fragments)
+        changes.save()
 
     major_minor_version = '.'.join(changes.latest_version.split('.')[:config.changelog_filename_version_depth])
     changelog_path = os.path.join(paths.changelog_dir, config.changelog_filename_template % major_minor_version)
