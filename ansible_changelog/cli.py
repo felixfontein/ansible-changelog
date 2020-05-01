@@ -24,6 +24,7 @@ from .changelog_generator import generate_changelog
 from .changes import load_changes, add_release
 from .config import PathsConfig, ChangelogConfig
 from .fragment import load_fragments, ChangelogFragmentLinter
+from .lint import lint_changelog_yaml
 from .plugins import load_plugins
 from .utils import LOGGER, makedirs, load_galaxy_metadata
 
@@ -35,8 +36,8 @@ def set_paths(force=None):
         try:
             paths = PathsConfig.detect()
         except ValueError:
-            print("Only the 'init' command can be used outside an Ansible checkout and outside"
-                  " a collection repository set up to use Ansible's changelog generator.\n")
+            print("Only the 'init' and 'lint-changelog' commands can be used outside an "
+                  "Ansible checkout and outside a collection repository.\n")
             sys.exit(3)
 
     return paths
@@ -93,6 +94,14 @@ def main():
     generate_parser.add_argument('--reload-plugins',
                                  action='store_true',
                                  help='force reload of plugin cache')
+
+    lint_changelog_parser = subparsers.add_parser('lint-changelog',
+                                                  parents=[common],
+                                                  help='check changelog.yaml file for syntax errors')
+    lint_changelog_parser.set_defaults(func=command_lint_changelog)
+    lint_changelog_parser.add_argument('changelog_yaml_path',
+                                       metavar='/path/to/changelog.yaml',
+                                       help='path to changelogs/changelog.yaml')
 
     if argcomplete:
         argcomplete.autocomplete(parser)
@@ -162,21 +171,6 @@ def command_init(args):
         sys.exit(3)
 
 
-def command_lint(args):
-    """
-    :type args: any
-    """
-    paths = set_paths()
-
-    fragment_paths = args.fragments  # type: list
-
-    config = ChangelogConfig.load(paths.config_path, paths.galaxy_path is not None)
-
-    exceptions = []
-    fragments = load_fragments(paths, config, fragment_paths, exceptions)
-    lint_fragments(config, fragments, exceptions)
-
-
 def command_release(args):
     """
     :type args: any
@@ -239,6 +233,33 @@ def command_generate(args):
         plugins = None
     fragments = load_fragments(paths, config)
     generate_changelog(paths, config, changes, plugins, fragments, flatmap=flatmap)
+
+
+def command_lint(args):
+    """
+    :type args: any
+    """
+    paths = set_paths()
+
+    fragment_paths = args.fragments  # type: list
+
+    config = ChangelogConfig.load(paths.config_path, paths.galaxy_path is not None)
+
+    exceptions = []
+    fragments = load_fragments(paths, config, fragment_paths, exceptions)
+    lint_fragments(config, fragments, exceptions)
+
+
+def command_lint_changelog(args):
+    """
+    :type args: any
+    """
+    errors = lint_changelog_yaml(args.changelog_yaml_path)
+
+    messages = sorted(set('%s:%d:%d: %s' % (error[0], error[1], error[2], error[3]) for error in errors))
+
+    for message in messages:
+        print(message)
 
 
 def lint_fragments(config, fragments, exceptions):

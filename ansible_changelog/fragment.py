@@ -74,6 +74,13 @@ class ChangelogFragment(object):
         return ChangelogFragment(content, path)
 
     @staticmethod
+    def from_dict(data, path=''):
+        """Create a ChangelogFragment from a dictionary.
+        :type data: dict
+        """
+        return ChangelogFragment(data, path)
+
+    @staticmethod
     def combine(fragments):
         """Combine fragments into a new fragment.
         :type fragments: list[ChangelogFragment]
