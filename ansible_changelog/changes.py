@@ -322,17 +322,13 @@ class ChangesMetadata(ChangesBase):
 class ChangesDataPluginResolver(PluginResolver):
     def __init__(self, changes):
         self.changes = changes
-        self.plugins = dict()
+        self.plugins = collections.defaultdict(dict)
         for version, config in changes.releases.items():
             if 'modules' in config:
-                if 'module' not in self.plugins:
-                    self.plugins['module'] = dict()
                 for plugin in config['modules']:
                     self.plugins['module'][plugin['name']] = plugin
             if 'plugins' in config:
                 for plugin_type, plugins in config['plugins'].items():
-                    if plugin_type not in self.plugins:
-                        self.plugins[plugin_type] = dict()
                     for plugin in plugins:
                         self.plugins[plugin_type][plugin['name']] = plugin
 
@@ -455,11 +451,7 @@ class ChangesData(ChangesBase):
         return True
 
     def _create_plugin_entry(self, plugin):
-        return dict(
-            name=plugin.name,
-            namespace=plugin.namespace,
-            description=plugin.description,
-        )
+        return SimplePluginResolver.resolve_plugin(plugin)
 
     def get_plugin_resolver(self, plugins=None):
         """

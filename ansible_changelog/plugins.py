@@ -170,7 +170,8 @@ class PluginResolver(object):
 
 
 class SimplePluginResolver(PluginResolver):
-    def _resolve_plugin(self, plugin):
+    @staticmethod
+    def resolve_plugin(plugin):
         return dict(
             name=plugin.name,
             namespace=plugin.namespace,
@@ -186,7 +187,7 @@ class SimplePluginResolver(PluginResolver):
             if plugin.type not in self.plugins:
                 self.plugins[plugin.type] = dict()
 
-            self.plugins[plugin.type][plugin.name] = self._resolve_plugin(plugin)
+            self.plugins[plugin.type][plugin.name] = self.resolve_plugin(plugin)
 
     def resolve(self, plugin_type, plugin_names):
         """Return a list of PluginDescription objects from the given data.
