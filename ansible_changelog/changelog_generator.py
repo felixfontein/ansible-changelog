@@ -117,22 +117,13 @@ class ChangelogGenerator(object):
                     else:
                         dest_changes[section] = list(lines)
 
-            if self.config.changes_format == 'classic':
-                entry_config['modules'] += release.get('modules', [])
+            entry_config['modules'] += release.get('modules', [])
 
-                for plugin_type, plugin_names in release.get('plugins', {}).items():
-                    if plugin_type not in entry_config['plugins']:
-                        entry_config['plugins'][plugin_type] = []
+            for plugin_type, plugins in release.get('plugins', {}).items():
+                if plugin_type not in entry_config['plugins']:
+                    entry_config['plugins'][plugin_type] = []
 
-                    entry_config['plugins'][plugin_type] += plugin_names
-            else:
-                entry_config['modules'] += [module['name'] for module in release.get('modules', [])]
-
-                for plugin_type, plugins in release.get('plugins', {}).items():
-                    if plugin_type not in entry_config['plugins']:
-                        entry_config['plugins'][plugin_type] = []
-
-                    entry_config['plugins'][plugin_type] += [plugin['name'] for plugin in plugins]
+                entry_config['plugins'][plugin_type] += plugins
 
         for version, release in release_entries.items():
             if not squash:
@@ -196,7 +187,10 @@ class ChangelogGenerator(object):
         have_section = False
 
         for plugin_type in sorted(plugin_types_and_names):
-            plugins = self.plugin_resolver.resolve(plugin_type, plugin_types_and_names.get(plugin_type, []))
+            plugin_names = plugin_types_and_names.get(plugin_type, [])
+            if self.config.changes_format != 'classic':
+                plugin_names = [plugin['name'] for plugin in plugin_names]
+            plugins = self.plugin_resolver.resolve(plugin_type, plugin_names)
 
             if not plugins:
                 continue
@@ -215,6 +209,9 @@ class ChangelogGenerator(object):
     def _add_modules(self, builder, module_names, flatmap, start_level=0):
         if not module_names:
             return
+
+        if self.config.changes_format != 'classic':
+            module_names = [module['name'] for module in module_names]
 
         modules = dict((module['name'], module) for module in self.plugin_resolver.resolve('module', module_names))
         previous_section = None
