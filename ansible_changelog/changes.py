@@ -53,7 +53,12 @@ def add_release(config, changes, plugins, fragments, version, codename, date):
     LOGGER.info('release version %s is a %s version', version, 'release' if is_release_version(config, version) else 'pre-release')
 
     # filter out plugins which were not added in this release
-    plugins = list(filter(lambda p: version.startswith('%s.' % p.version_added) or version.startswith('%s-' % p.version_added) or version == p.version_added, plugins))
+    plugins = list(filter(lambda p: any([
+        version.startswith('%s.' % p.version_added),
+        version.startswith('%s-' % p.version_added),  # needed for semver
+        version.startswith('%s+' % p.version_added),  # needed for semver
+        version == p.version_added
+    ]), plugins))
 
     changes.add_release(version, codename, date)
 
