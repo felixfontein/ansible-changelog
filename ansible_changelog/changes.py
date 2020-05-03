@@ -482,10 +482,11 @@ class ChangesData(ChangesBase):
         for version in list(self.data['releases']):
             v = self.Version(version)
             if versions_after is not None and v <= versions_after:
+                del self.data['releases'][version]
                 continue
             if versions_until is not None and v > versions_until:
+                del self.data['releases'][version]
                 continue
-            del self.data['releases'][version]
 
     @staticmethod
     def concatenate(changes_datas):
