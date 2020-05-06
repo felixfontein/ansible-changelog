@@ -275,7 +275,7 @@ def lint_fragments(config, fragments, exceptions):
     for fragment in fragments:
         errors += linter.lint(fragment)
 
-    messages = sorted(set('%s:%d:%d: %s' % (error[0], error[1], error[2], error[3]) for error in errors))
+    messages = sorted(set('%s:%d:%d: %s' % (os.path.relpath(error[0]), error[1], error[2], error[3]) for error in errors))
 
     for message in messages:
         print(message)
