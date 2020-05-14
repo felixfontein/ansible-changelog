@@ -1,5 +1,0 @@
-# ansible>=2.9
-docutils
-rstcheck
-packaging
-semantic_version

@@ -1,8 +1,4 @@
 Ansible Changelog Generator
 ===========================
 
-WIP for changelog generator which works for collections as well.
-
-Based on https://github.com/ansible/ansible/blob/devel/packaging/release/changelogs/changelog.py
-
-See [CHANGELOG-FORMAT](CHANGELOG-FORMAT.md) for how the `changelogs/changelog.yaml` files have to look like in collections.
+This project has been moved to https://github.com/ansible-community/ansibulled; the executable is now known as `ansibulled-changelog`.
